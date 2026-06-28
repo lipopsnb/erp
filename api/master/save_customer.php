@@ -8,6 +8,7 @@ requireRole('director','accountant','warehouse','manager');
 
 $pdo  = getDBConnection();
 $user = currentUser();
+$action = trim($_POST['action'] ?? 'save');
 
 if (!verifyCSRF($_POST['csrf_token'] ?? '')) {
     echo json_encode(['ok' => false, 'msg' => 'CSRF invalid']); exit;
@@ -22,11 +23,49 @@ $phone         = trim($_POST['phone'] ?? '') ?: null;
 $email         = trim($_POST['email'] ?? '') ?: null;
 $isActive      = isset($_POST['is_active']) ? 1 : 0;
 
-if (!$customerName) {
+if ($action !== 'delete' && !$customerName) {
     echo json_encode(['ok' => false, 'msg' => 'Thiếu tên khách hàng']); exit;
 }
 
 try {
+    if ($action === 'delete') {
+        if (!hasRole('director')) {
+            echo json_encode(['ok' => false, 'msg' => 'Bạn không có quyền xoá khách hàng']); exit;
+        }
+        if (!$id) {
+            echo json_encode(['ok' => false, 'msg' => 'Thiếu ID khách hàng']); exit;
+        }
+
+        $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?");
+        $hasTxn = false;
+        foreach ([
+            'warehouse_in'  => "SELECT COUNT(*) FROM warehouse_in WHERE customer_id = ?",
+            'warehouse_out' => "SELECT COUNT(*) FROM warehouse_out WHERE customer_id = ?",
+            'deliveries'    => "SELECT COUNT(*) FROM deliveries WHERE customer_id = ?",
+            'invoices'      => "SELECT COUNT(*) FROM invoices WHERE customer_id = ?"
+        ] as $table => $countSql) {
+            $checkStmt->execute([$table]);
+            if (!(int)$checkStmt->fetchColumn()) {
+                continue;
+            }
+            $cntStmt = $pdo->prepare($countSql);
+            $cntStmt->execute([$id]);
+            if ((int)$cntStmt->fetchColumn() > 0) {
+                $hasTxn = true;
+                break;
+            }
+        }
+
+        if ($hasTxn) {
+            $pdo->prepare("UPDATE customers SET is_active = 0, updated_at = NOW() WHERE id = ?")->execute([$id]);
+            echo json_encode(['ok' => true, 'msg' => 'Khách hàng đã có giao dịch, đã chuyển sang trạng thái ngừng']);
+        } else {
+            $pdo->prepare("DELETE FROM customers WHERE id = ?")->execute([$id]);
+            echo json_encode(['ok' => true, 'msg' => 'Đã xoá khách hàng']);
+        }
+        exit;
+    }
+
     if ($id) {
         $stmt = $pdo->prepare("
             UPDATE customers
