@@ -143,20 +143,6 @@ $sidebarUser = currentUser();
                 <i class="fas fa-users"></i> <span>Khách hàng</span>
             </a>
         </li>
-        <li class="nav-item">
-            <a class="nav-link <?= isActive('/master/product_codes') ?>"
-               href="/erp/modules/master/product_codes.php">
-                <i class="fas fa-barcode"></i> <span>Mã sản phẩm</span>
-            </a>
-        </li>
-        <?php endif; ?>
-        <?php if (hasRole('director','accountant','manager')): ?>
-        <li class="nav-item">
-            <a class="nav-link <?= isActive('/master/prices') ?>"
-               href="/erp/modules/master/prices.php">
-                <i class="fas fa-tags"></i> <span>Bảng giá</span>
-            </a>
-        </li>
         <?php endif; ?>
 
         <!-- ==================== KHO & SẢN XUẤT ==================== -->
