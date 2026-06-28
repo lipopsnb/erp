@@ -134,6 +134,31 @@ $sidebarUser = currentUser();
         </li>
         <?php endif; ?>
 
+        <!-- ==================== DANH MỤC ==================== -->
+        <?php if (hasRole('director','accountant','warehouse','production','manager')): ?>
+        <li class="nav-section">DANH MỤC</li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/master/customers') ?>"
+               href="/erp/modules/master/customers.php">
+                <i class="fas fa-users"></i> <span>Khách hàng</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/master/product_codes') ?>"
+               href="/erp/modules/master/product_codes.php">
+                <i class="fas fa-barcode"></i> <span>Mã sản phẩm</span>
+            </a>
+        </li>
+        <?php endif; ?>
+        <?php if (hasRole('director','accountant','manager')): ?>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/master/prices') ?>"
+               href="/erp/modules/master/prices.php">
+                <i class="fas fa-tags"></i> <span>Bảng giá</span>
+            </a>
+        </li>
+        <?php endif; ?>
+
         <!-- ==================== KHO & SẢN XUẤT ==================== -->
         <?php if (hasRole('director','accountant','warehouse','production','manager')): ?>
         <li class="nav-section">KHO & SẢN XUẤT</li>
@@ -204,22 +229,22 @@ $sidebarUser = currentUser();
         <?php endif; ?>
 
         <!-- ==================== KPI SẢN XUẤT ==================== -->
-<?php if (hasRole('director', 'accountant', 'manager', 'warehouse', 'production')): ?>
-<li class="nav-section">KPI SẢN XUẤT</li>
-<li class="nav-item">
-    <a class="nav-link <?= isActive('/modules/kpi/assign') ?>"
-       href="/erp/modules/kpi/assign.php">
-        <i class="fas fa-tasks"></i> <span>Phân bổ KPI</span>
-    </a>
-</li>
-<li class="nav-item">
-    <a class="nav-link <?= isActive('/modules/kpi/result') ?>"
-       href="/erp/modules/kpi/result.php">
-        <i class="fas fa-clipboard-check"></i> <span>Kết quả KPI</span>
-        <span class="badge bg-warning text-dark ms-1" id="sidebarKpiCount"></span>
-    </a>
-</li>
-<?php endif; ?>
+        <?php if (hasRole('director', 'accountant', 'manager', 'warehouse', 'production')): ?>
+        <li class="nav-section">KPI SẢN XUẤT</li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/modules/kpi/assign') ?>"
+               href="/erp/modules/kpi/assign.php">
+                <i class="fas fa-tasks"></i> <span>Phân bổ KPI</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/modules/kpi/result') ?>"
+               href="/erp/modules/kpi/result.php">
+                <i class="fas fa-clipboard-check"></i> <span>Kết quả KPI</span>
+                <span class="badge bg-warning text-dark ms-1" id="sidebarKpiCount"></span>
+            </a>
+        </li>
+        <?php endif; ?>
 
         <!-- ==================== QUẢN LÝ HỆ THỐNG ==================== -->
         <?php if (hasRole('director', 'accountant')): ?>
