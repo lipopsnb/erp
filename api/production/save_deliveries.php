@@ -88,10 +88,22 @@ if ($action === 'confirm') {
                 $items = $items->fetchAll(PDO::FETCH_ASSOC);
 
                 $subtotal = 0;
+
+                // Kiểm tra một lần xem customer_prices có cột effective_date không
+                $hasEffectiveDate = false;
+                $colCheck = $pdo->prepare("
+                    SELECT COUNT(*) FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'customer_prices'
+                      AND COLUMN_NAME = 'effective_date'
+                ");
+                $colCheck->execute();
+                $hasEffectiveDate = (bool)$colCheck->fetchColumn();
+
                 foreach ($items as $item) {
-                    // Lấy giá từ customer_prices — thử với effective_date trước, fallback về query đơn giản
+                    // Lấy giá từ customer_prices
                     $unitPrice = false;
-                    try {
+                    if ($hasEffectiveDate) {
                         $priceStmt = $pdo->prepare("
                             SELECT unit_price FROM customer_prices
                             WHERE customer_id = ? AND product_code_id = ?
@@ -100,24 +112,17 @@ if ($action === 'confirm') {
                               AND is_active = 1
                             ORDER BY effective_date DESC LIMIT 1
                         ");
-                        $priceStmt->execute([$del['customer_id'], $item['product_code_id']]);
-                        $unitPrice = $priceStmt->fetchColumn();
-                    } catch (Throwable $e) {
-                        // effective_date chưa có (migration chưa chạy) — thử query đơn giản
-                        try {
-                            $priceStmt = $pdo->prepare("
-                                SELECT unit_price FROM customer_prices
-                                WHERE customer_id = ? AND product_code_id = ? AND is_active = 1
-                                ORDER BY id DESC LIMIT 1
-                            ");
-                            $priceStmt->execute([$del['customer_id'], $item['product_code_id']]);
-                            $unitPrice = $priceStmt->fetchColumn();
-                        } catch (Throwable $e2) {
-                            $unitPrice = false;
-                        }
+                    } else {
+                        $priceStmt = $pdo->prepare("
+                            SELECT unit_price FROM customer_prices
+                            WHERE customer_id = ? AND product_code_id = ? AND is_active = 1
+                            ORDER BY id DESC LIMIT 1
+                        ");
                     }
+                    $priceStmt->execute([$del['customer_id'], $item['product_code_id']]);
+                    $unitPrice = $priceStmt->fetchColumn();
 
-                    // Fallback về giá trong phiếu giao nếu không có customer_prices
+                    // Fallback về giá trong phiếu giao nếu không tìm thấy customer_prices
                     if ($unitPrice === false || $unitPrice === null) {
                         $unitPrice = $item['unit_price'] ?? 0;
                     }
