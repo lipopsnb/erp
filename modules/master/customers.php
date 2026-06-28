@@ -29,7 +29,6 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 ?>
 
 <div class="main-content">
-<?php include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/warehouse_nav.php'; ?>
 <div class="container-fluid py-4">
 
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -82,6 +81,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <th width="130">Điện thoại</th>
                             <th>Địa chỉ</th>
                             <th width="80">Trạng thái</th>
+                            <th width="80">Hồ sơ</th>
                             <?php if (hasRole('director','accountant','warehouse','manager')): ?>
                             <th width="100">Thao tác</th>
                             <?php endif; ?>
@@ -89,7 +89,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                     </thead>
                     <tbody>
                     <?php if (empty($customers)): ?>
-                        <tr><td colspan="8" class="text-center text-muted py-4">Chưa có khách hàng nào</td></tr>
+                        <tr><td colspan="<?= hasRole('director','accountant','warehouse','manager') ? 9 : 8 ?>" class="text-center text-muted py-4">Chưa có khách hàng nào</td></tr>
                     <?php else: ?>
                         <?php foreach ($customers as $i => $c): ?>
                         <tr>
@@ -103,6 +103,11 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                 <?= $c['is_active']
                                     ? '<span class="badge bg-success">Đang dùng</span>'
                                     : '<span class="badge bg-secondary">Ngừng</span>' ?>
+                            </td>
+                            <td>
+                                <a href="customer_profile.php?id=<?= (int)$c['id'] ?>" class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-id-card"></i>
+                                </a>
                             </td>
                             <?php if (hasRole('director','accountant','warehouse','manager')): ?>
                             <td>

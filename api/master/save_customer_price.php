@@ -6,58 +6,113 @@ header('Content-Type: application/json');
 requireLogin();
 requireRole('director','accountant','manager');
 
-$pdo  = getDBConnection();
-$user = currentUser();
+$pdo = getDBConnection();
 
 if (!verifyCSRF($_POST['csrf_token'] ?? '')) {
     echo json_encode(['ok' => false, 'msg' => 'CSRF invalid']); exit;
 }
 
-$customerId    = (int)($_POST['customer_id']     ?? 0);
+$action        = trim($_POST['action'] ?? 'save');
+$id            = (int)($_POST['id'] ?? 0);
+$customerId    = (int)($_POST['customer_id'] ?? 0);
 $productCodeId = (int)($_POST['product_code_id'] ?? 0);
-$unitPrice     = (float)($_POST['unit_price']    ?? 0);
-$note          = trim($_POST['note']             ?? '') ?: null;
-$isActive      = isset($_POST['is_active']) ? 1 : 1;
-$action        = trim($_POST['action']           ?? 'save');
+$unitPrice     = (float)($_POST['unit_price'] ?? 0);
+$effectiveDate = trim($_POST['effective_date'] ?? date('Y-m-d'));
+$note          = trim($_POST['note'] ?? '') ?: null;
 
-if (!$customerId || !$productCodeId) {
-    echo json_encode(['ok' => false, 'msg' => 'Thiếu khách hàng hoặc mã sản phẩm']); exit;
+if ($action === 'save') {
+    $action = $id ? 'edit' : 'add';
 }
-if ($unitPrice < 0) {
-    echo json_encode(['ok' => false, 'msg' => 'Đơn giá không hợp lệ']); exit;
-}
+
+$isValidDate = static function ($date): bool {
+    if (!$date) return false;
+    $d = DateTime::createFromFormat('Y-m-d', $date);
+    return $d && $d->format('Y-m-d') === $date;
+};
 
 try {
     if ($action === 'delete') {
-        $id = (int)($_POST['id'] ?? 0);
-        if (!$id) { echo json_encode(['ok' => false, 'msg' => 'Thiếu ID']); exit; }
-        $pdo->prepare("DELETE FROM customer_prices WHERE id = ?")->execute([$id]);
-        echo json_encode(['ok' => true, 'msg' => 'Đã xoá đơn giá']);
+        if (!$customerId || !$productCodeId) {
+            if (!$id) {
+                echo json_encode(['ok' => false, 'msg' => 'Thiếu thông tin xoá']); exit;
+            }
+            $stmt = $pdo->prepare("SELECT customer_id, product_code_id FROM customer_prices WHERE id = ?");
+            $stmt->execute([$id]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) {
+                echo json_encode(['ok' => false, 'msg' => 'Không tìm thấy bản ghi']); exit;
+            }
+            $customerId = (int)$row['customer_id'];
+            $productCodeId = (int)$row['product_code_id'];
+        }
+
+        $stmt = $pdo->prepare("DELETE FROM customer_prices WHERE customer_id = ? AND product_code_id = ?");
+        $stmt->execute([$customerId, $productCodeId]);
+        echo json_encode(['ok' => true, 'msg' => 'Đã xoá toàn bộ lịch sử giá của mã hàng']);
         exit;
     }
 
-    $id = (int)($_POST['id'] ?? 0);
-
-    if ($id) {
-        // Update
-        $pdo->prepare("
-            UPDATE customer_prices
-            SET customer_id = ?, product_code_id = ?, unit_price = ?, note = ?, is_active = ?
-            WHERE id = ?
-        ")->execute([$customerId, $productCodeId, $unitPrice, $note, $isActive, $id]);
-        echo json_encode(['ok' => true, 'msg' => 'Đã cập nhật đơn giá']);
-    } else {
-        // Insert or update on duplicate
-        $pdo->prepare("
-            INSERT INTO customer_prices (customer_id, product_code_id, unit_price, note, is_active)
-            VALUES (?, ?, ?, ?, ?)
-            ON DUPLICATE KEY UPDATE unit_price = VALUES(unit_price),
-                                    note       = VALUES(note),
-                                    is_active  = VALUES(is_active)
-        ")->execute([$customerId, $productCodeId, $unitPrice, $note, $isActive]);
-        echo json_encode(['ok' => true, 'msg' => 'Đã lưu đơn giá']);
+    if (!$customerId || !$productCodeId || !$isValidDate($effectiveDate)) {
+        echo json_encode(['ok' => false, 'msg' => 'Thiếu khách hàng, mã sản phẩm hoặc ngày áp dụng không hợp lệ']); exit;
     }
+    if ($unitPrice < 0) {
+        echo json_encode(['ok' => false, 'msg' => 'Đơn giá không hợp lệ']); exit;
+    }
+
+    $expireDate = date('Y-m-d', strtotime($effectiveDate . ' -1 day'));
+
+    if ($action === 'edit') {
+        if (!$id) {
+            echo json_encode(['ok' => false, 'msg' => 'Thiếu id bản ghi cần sửa']); exit;
+        }
+
+        $oldStmt = $pdo->prepare("SELECT * FROM customer_prices WHERE id = ?");
+        $oldStmt->execute([$id]);
+        $old = $oldStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$old) {
+            echo json_encode(['ok' => false, 'msg' => 'Không tìm thấy giá cần sửa']); exit;
+        }
+
+        if (!$customerId) $customerId = (int)$old['customer_id'];
+        if (!$productCodeId) $productCodeId = (int)$old['product_code_id'];
+
+        $pdo->beginTransaction();
+        $pdo->prepare("UPDATE customer_prices SET expired_date = ? WHERE id = ?")
+            ->execute([$expireDate, $id]);
+        $pdo->prepare("
+            INSERT INTO customer_prices (customer_id, product_code_id, unit_price, effective_date, expired_date, note, is_active)
+            VALUES (?, ?, ?, ?, NULL, ?, 1)
+        ")->execute([$customerId, $productCodeId, $unitPrice, $effectiveDate, $note]);
+        $pdo->commit();
+
+        echo json_encode(['ok' => true, 'msg' => 'Đã cập nhật giá mới']);
+        exit;
+    }
+
+    if ($action !== 'add') {
+        echo json_encode(['ok' => false, 'msg' => 'Action không hợp lệ']); exit;
+    }
+
+    $pdo->beginTransaction();
+    $pdo->prepare("
+        UPDATE customer_prices
+        SET expired_date = ?
+        WHERE customer_id = ?
+          AND product_code_id = ?
+          AND effective_date <= ?
+          AND (expired_date IS NULL OR expired_date >= ?)
+    ")->execute([$expireDate, $customerId, $productCodeId, $effectiveDate, $effectiveDate]);
+    $pdo->prepare("
+        INSERT INTO customer_prices (customer_id, product_code_id, unit_price, effective_date, expired_date, note, is_active)
+        VALUES (?, ?, ?, ?, NULL, ?, 1)
+    ")->execute([$customerId, $productCodeId, $unitPrice, $effectiveDate, $note]);
+    $pdo->commit();
+
+    echo json_encode(['ok' => true, 'msg' => 'Đã thêm đơn giá']);
 } catch (Throwable $e) {
+    if ($pdo->inTransaction()) {
+        $pdo->rollBack();
+    }
     error_log($e->getMessage());
-    echo json_encode(['ok' => false, 'msg' => 'Lỗi hệ thống: ' . $e->getMessage()]);
+    echo json_encode(['ok' => false, 'msg' => 'Lỗi hệ thống']);
 }
