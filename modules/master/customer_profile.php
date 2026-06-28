@@ -304,7 +304,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" data-bs-dismiss="modal">Huỷ</button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
                 <button class="btn btn-primary" id="btnSaveCustomer"><i class="fas fa-save me-1"></i>Lưu</button>
             </div>
         </div>
@@ -351,7 +351,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                 </form>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" data-bs-dismiss="modal">Huỷ</button>
+                <button class="btn btn-secondary" data-bs-dismiss="modal">Hủy</button>
                 <button class="btn btn-primary" id="btnSavePrice"><i class="fas fa-save me-1"></i>Lưu</button>
             </div>
         </div>

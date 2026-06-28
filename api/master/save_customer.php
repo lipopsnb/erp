@@ -39,16 +39,16 @@ try {
         $checkStmt = $pdo->prepare("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?");
         $hasTxn = false;
         foreach ([
-            ['table' => 'warehouse_in', 'col' => 'customer_id'],
-            ['table' => 'warehouse_out', 'col' => 'customer_id'],
-            ['table' => 'deliveries', 'col' => 'customer_id'],
-            ['table' => 'invoices', 'col' => 'customer_id']
-        ] as $ref) {
-            $checkStmt->execute([$ref['table']]);
+            'warehouse_in'  => "SELECT COUNT(*) FROM warehouse_in WHERE customer_id = ?",
+            'warehouse_out' => "SELECT COUNT(*) FROM warehouse_out WHERE customer_id = ?",
+            'deliveries'    => "SELECT COUNT(*) FROM deliveries WHERE customer_id = ?",
+            'invoices'      => "SELECT COUNT(*) FROM invoices WHERE customer_id = ?"
+        ] as $table => $countSql) {
+            $checkStmt->execute([$table]);
             if (!(int)$checkStmt->fetchColumn()) {
                 continue;
             }
-            $cntStmt = $pdo->prepare("SELECT COUNT(*) FROM `{$ref['table']}` WHERE `{$ref['col']}` = ?");
+            $cntStmt = $pdo->prepare($countSql);
             $cntStmt->execute([$id]);
             if ((int)$cntStmt->fetchColumn() > 0) {
                 $hasTxn = true;
