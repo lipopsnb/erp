@@ -53,23 +53,6 @@ $historyStmt = $pdo->prepare("
 $historyStmt->execute([$id]);
 $priceHistory = $historyStmt->fetchAll(PDO::FETCH_ASSOC);
 
-$addableStmt = $pdo->prepare("
-    SELECT pc.id, pc.product_code, pc.description, pc.unit
-    FROM product_codes pc
-    WHERE pc.is_active = 1
-      AND NOT EXISTS (
-        SELECT 1
-        FROM customer_prices cp
-        WHERE cp.customer_id = ?
-          AND cp.product_code_id = pc.id
-          AND cp.effective_date <= CURDATE()
-          AND (cp.expired_date IS NULL OR cp.expired_date >= CURDATE())
-      )
-    ORDER BY pc.product_code
-");
-$addableStmt->execute([$id]);
-$addableProducts = $addableStmt->fetchAll(PDO::FETCH_ASSOC);
-
 $csrf = generateCSRF();
 include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/header.php';
 include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
@@ -182,6 +165,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                             <th>Đơn vị</th>
                                             <th class="text-end">Đơn giá</th>
                                             <th>Ngày áp dụng</th>
+                                            <th>Đến ngày</th>
                                             <?php if (hasRole('director','accountant','manager')): ?>
                                             <th width="120">Thao tác</th>
                                             <?php endif; ?>
@@ -189,7 +173,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                     </thead>
                                     <tbody>
                                     <?php if (empty($currentPrices)): ?>
-                                        <tr><td colspan="<?= hasRole('director','accountant','manager') ? 6 : 5 ?>" class="text-center text-muted py-4">Chưa có giá hiện tại</td></tr>
+                                        <tr><td colspan="<?= hasRole('director','accountant','manager') ? 7 : 6 ?>" class="text-center text-muted py-4">Chưa có giá hiện tại</td></tr>
                                     <?php else: ?>
                                         <?php foreach ($currentPrices as $row): ?>
                                         <tr>
@@ -198,14 +182,18 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                             <td><?= htmlspecialchars($row['unit'] ?? '—') ?></td>
                                             <td class="text-end fw-semibold"><?= number_format((float)$row['unit_price'], 0, ',', '.') ?> đ</td>
                                             <td><?= !empty($row['effective_date']) ? date('d/m/Y', strtotime($row['effective_date'])) : '—' ?></td>
+                                            <td><?= !empty($row['expired_date']) ? date('d/m/Y', strtotime($row['expired_date'])) : '—' ?></td>
                                             <?php if (hasRole('director','accountant','manager')): ?>
                                             <td>
                                                 <button class="btn btn-outline-warning btn-sm btn-edit-price"
                                                         data-id="<?= (int)$row['id'] ?>"
                                                         data-product-id="<?= (int)$row['product_code_id'] ?>"
-                                                        data-product-text="[<?= htmlspecialchars($row['product_code']) ?>] <?= htmlspecialchars($row['description']) ?>"
+                                                        data-product-code="<?= htmlspecialchars($row['product_code']) ?>"
+                                                        data-description="<?= htmlspecialchars($row['description']) ?>"
+                                                        data-unit="<?= htmlspecialchars($row['unit'] ?? '') ?>"
                                                         data-price="<?= htmlspecialchars($row['unit_price']) ?>"
-                                                        data-effective-date="<?= htmlspecialchars($row['effective_date'] ?? '') ?>">
+                                                        data-effective-date="<?= htmlspecialchars($row['effective_date'] ?? '') ?>"
+                                                        data-expired-date="<?= htmlspecialchars($row['expired_date'] ?? '') ?>">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
                                                 <button class="btn btn-outline-danger btn-sm btn-delete-price"
@@ -337,16 +325,38 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                     <input type="hidden" name="action" id="priceAction" value="add">
                     <input type="hidden" name="id" id="priceId" value="">
                     <input type="hidden" name="customer_id" value="<?= (int)$customer['id'] ?>">
-                    <input type="hidden" name="product_code_id_locked" id="priceProductLocked" value="">
-                    <div class="mb-3">
-                        <label class="form-label fw-semibold">Mã sản phẩm <span class="text-danger">*</span></label>
-                        <select class="form-select" name="product_code_id" id="priceProduct" required>
-                            <option value="">-- Chọn mã sản phẩm --</option>
-                            <?php foreach ($addableProducts as $p): ?>
-                            <option value="<?= (int)$p['id'] ?>">[<?= htmlspecialchars($p['product_code']) ?>] <?= htmlspecialchars($p['description']) ?> (<?= htmlspecialchars($p['unit'] ?? '—') ?>)</option>
-                            <?php endforeach; ?>
-                        </select>
+                    <input type="hidden" name="product_code_id" id="priceProductId" value="">
+
+                    <div id="addOnlyFields">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Mã sản phẩm <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control text-uppercase" name="product_code" id="priceProductCode" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Tên sản phẩm <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="description" id="priceDescription" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Đơn vị tính <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" name="unit" id="priceUnit" required>
+                        </div>
                     </div>
+
+                    <div id="editReadonlyFields" style="display:none;">
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Mã sản phẩm</label>
+                            <input type="text" class="form-control bg-light" id="displayProductCode" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Tên sản phẩm</label>
+                            <input type="text" class="form-control bg-light" id="displayDescription" readonly>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Đơn vị tính</label>
+                            <input type="text" class="form-control bg-light" id="displayUnit" readonly>
+                        </div>
+                    </div>
+
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Đơn giá <span class="text-danger">*</span></label>
                         <input type="number" class="form-control" name="unit_price" id="priceValue" min="0" step="1" required>
@@ -354,6 +364,10 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Ngày áp dụng <span class="text-danger">*</span></label>
                         <input type="date" class="form-control" name="effective_date" id="priceDate" value="<?= date('Y-m-d') ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Đến ngày</label>
+                        <input type="date" class="form-control" name="expired_date" id="priceExpiredDate">
                     </div>
                     <div class="mb-3">
                         <label class="form-label fw-semibold">Ghi chú</label>
@@ -399,11 +413,10 @@ document.getElementById('btnAddPrice')?.addEventListener('click', () => {
     document.getElementById('modalPriceTitle').innerHTML = '<i class="fas fa-plus me-2"></i>Thêm mã SP';
     document.getElementById('priceAction').value = 'add';
     document.getElementById('priceId').value = '';
-    document.getElementById('priceProductLocked').value = '';
-    const priceProduct = document.getElementById('priceProduct');
-    priceProduct.disabled = false;
-    const tempOption = document.getElementById('tempPriceProductOption');
-    if (tempOption) tempOption.remove();
+    document.getElementById('priceProductId').value = '';
+    document.getElementById('addOnlyFields').style.display = '';
+    document.getElementById('editReadonlyFields').style.display = 'none';
+    document.querySelectorAll('#addOnlyFields input').forEach(el => { el.disabled = false; });
     document.getElementById('formPrice').reset();
     document.getElementById('priceDate').value = '<?= date('Y-m-d') ?>';
 });
@@ -413,19 +426,16 @@ document.querySelectorAll('.btn-edit-price').forEach(btn => {
         document.getElementById('modalPriceTitle').innerHTML = '<i class="fas fa-edit me-2"></i>Sửa giá';
         document.getElementById('priceAction').value = 'edit';
         document.getElementById('priceId').value = btn.dataset.id;
-        const priceProduct = document.getElementById('priceProduct');
-        if (!priceProduct.querySelector(`option[value="${btn.dataset.productId}"]`)) {
-            const opt = document.createElement('option');
-            opt.id = 'tempPriceProductOption';
-            opt.value = btn.dataset.productId;
-            opt.textContent = btn.dataset.productText;
-            priceProduct.appendChild(opt);
-        }
-        priceProduct.value = btn.dataset.productId;
-        document.getElementById('priceProductLocked').value = btn.dataset.productId;
-        priceProduct.disabled = true;
+        document.getElementById('priceProductId').value = btn.dataset.productId;
+        document.getElementById('addOnlyFields').style.display = 'none';
+        document.querySelectorAll('#addOnlyFields input').forEach(el => { el.disabled = true; });
+        document.getElementById('editReadonlyFields').style.display = '';
+        document.getElementById('displayProductCode').value = btn.dataset.productCode || '';
+        document.getElementById('displayDescription').value = btn.dataset.description || '';
+        document.getElementById('displayUnit').value = btn.dataset.unit || '';
         document.getElementById('priceValue').value = btn.dataset.price;
         document.getElementById('priceDate').value = btn.dataset.effectiveDate || '<?= date('Y-m-d') ?>';
+        document.getElementById('priceExpiredDate').value = btn.dataset.expiredDate || '';
         document.getElementById('priceNote').value = '';
         new bootstrap.Modal(document.getElementById('modalPrice')).show();
     });
@@ -435,9 +445,6 @@ document.getElementById('btnSavePrice')?.addEventListener('click', () => {
     const form = document.getElementById('formPrice');
     if (!form.checkValidity()) { form.reportValidity(); return; }
     const fd = new FormData(form);
-    if (document.getElementById('priceProduct').disabled) {
-        fd.set('product_code_id', document.getElementById('priceProductLocked').value);
-    }
     fetch('/erp/api/master/save_customer_price.php', { method: 'POST', body: fd })
         .then(r => r.json())
         .then(d => d.ok ? location.reload() : alert('Lỗi: ' + d.msg));
