@@ -8,30 +8,31 @@ $id  = (int)($_GET['id'] ?? 0);
 if (!$id) die('Không tìm thấy biên bản');
 
 $delivery = $pdo->prepare("
-    SELECT dn.*,
-           c.customer_name, c.customer_code, c.address, c.phone
-    FROM delivery_notes dn
-    LEFT JOIN customers c ON dn.customer_id = c.id
-    WHERE dn.id = ?
+    SELECT d.*,
+           c.customer_name, c.customer_code, c.address, c.phone, c.tax_code
+    FROM deliveries d
+    LEFT JOIN customers c ON d.customer_id = c.id
+    WHERE d.id = ?
 ");
 $delivery->execute([$id]);
 $delivery = $delivery->fetch(PDO::FETCH_ASSOC);
 if (!$delivery) die('Không tìm thấy biên bản');
 
 $items = $pdo->prepare("
-    SELECT dni.*,
+    SELECT di.*,
            pc.product_code,
+           pc.description,
            pc.unit
-    FROM delivery_note_items dni
-    JOIN product_codes pc ON dni.product_code_id = pc.id
-    WHERE dni.delivery_note_id = ?
-    ORDER BY dni.id
+    FROM delivery_items di
+    JOIN product_codes pc ON di.product_code_id = pc.id
+    WHERE di.delivery_id = ?
+    ORDER BY di.id
 ");
 $items->execute([$id]);
 $items = $items->fetchAll(PDO::FETCH_ASSOC);
 
 $totalQty    = array_sum(array_column($items, 'quantity'));
-$totalAmount = array_sum(array_column($items, 'total_price'));
+$totalAmount = $delivery['total_amount'] ?? array_sum(array_column($items, 'total_price'));
 ?>
 <!DOCTYPE html>
 <html lang="vi">
