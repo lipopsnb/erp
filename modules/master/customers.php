@@ -1,0 +1,251 @@
+<?php
+require_once $_SERVER['DOCUMENT_ROOT'] . '/erp/config/database.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/erp/config/auth.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/erp/config/functions.php';
+requireLogin();
+requireRole('director','accountant','warehouse','production','manager');
+
+$pdo  = getDBConnection();
+$user = currentUser();
+
+$search = trim($_GET['search'] ?? '');
+$where  = ['1=1'];
+$params = [];
+if ($search) {
+    $where[]  = '(customer_name LIKE ? OR customer_code LIKE ? OR phone LIKE ?)';
+    $params[] = "%$search%";
+    $params[] = "%$search%";
+    $params[] = "%$search%";
+}
+
+$stmt = $pdo->prepare('SELECT * FROM customers WHERE ' . implode(' AND ', $where) . ' ORDER BY customer_name');
+$stmt->execute($params);
+$customers = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+$csrf = generateCSRF();
+include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/header.php';
+include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
+
+?>
+
+<div class="main-content">
+<?php include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/warehouse_nav.php'; ?>
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="fas fa-users me-2 text-primary"></i>Danh mục khách hàng</h4>
+            <p class="text-muted mb-0">Quản lý thông tin khách hàng</p>
+        </div>
+        <?php if (hasRole('director','accountant','warehouse','manager')): ?>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalCust">
+            <i class="fas fa-plus me-1"></i> Thêm khách hàng
+        </button>
+        <?php endif; ?>
+    </div>
+
+    <?php showFlash(); ?>
+
+    <!-- Search -->
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body py-2">
+            <form class="row g-2 align-items-center" method="GET">
+                <div class="col-md-4">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" name="search" class="form-control"
+                               placeholder="Tên, mã KH, số điện thoại..."
+                               value="<?= htmlspecialchars($search) ?>">
+                    </div>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="fas fa-filter me-1"></i>Lọc
+                    </button>
+                    <a href="?" class="btn btn-sm btn-outline-secondary ms-1">Reset</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bảng -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th width="50">#</th>
+                            <th width="120">Mã KH</th>
+                            <th>Tên khách hàng</th>
+                            <th width="150">Người liên hệ</th>
+                            <th width="130">Điện thoại</th>
+                            <th>Địa chỉ</th>
+                            <th width="80">Trạng thái</th>
+                            <?php if (hasRole('director','accountant','warehouse','manager')): ?>
+                            <th width="100">Thao tác</th>
+                            <?php endif; ?>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($customers)): ?>
+                        <tr><td colspan="8" class="text-center text-muted py-4">Chưa có khách hàng nào</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($customers as $i => $c): ?>
+                        <tr>
+                            <td class="text-muted small"><?= $i + 1 ?></td>
+                            <td><span class="badge bg-secondary"><?= htmlspecialchars($c['customer_code'] ?? '—') ?></span></td>
+                            <td class="fw-semibold"><?= htmlspecialchars($c['customer_name']) ?></td>
+                            <td><?= htmlspecialchars($c['contact_person'] ?? '—') ?></td>
+                            <td><?= htmlspecialchars($c['phone'] ?? '—') ?></td>
+                            <td class="text-muted small"><?= htmlspecialchars($c['address'] ?? '—') ?></td>
+                            <td class="text-center">
+                                <?= $c['is_active']
+                                    ? '<span class="badge bg-success">Đang dùng</span>'
+                                    : '<span class="badge bg-secondary">Ngừng</span>' ?>
+                            </td>
+                            <?php if (hasRole('director','accountant','warehouse','manager')): ?>
+                            <td>
+                                <button class="btn btn-sm btn-outline-warning btn-edit-cust"
+                                    data-id="<?= $c['id'] ?>"
+                                    data-code="<?= htmlspecialchars($c['customer_code'] ?? '') ?>"
+                                    data-name="<?= htmlspecialchars($c['customer_name']) ?>"
+                                    data-address="<?= htmlspecialchars($c['address'] ?? '') ?>"
+                                    data-contact="<?= htmlspecialchars($c['contact_person'] ?? '') ?>"
+                                    data-phone="<?= htmlspecialchars($c['phone'] ?? '') ?>"
+                                    data-email="<?= htmlspecialchars($c['email'] ?? '') ?>"
+                                    data-active="<?= $c['is_active'] ?>">
+                                    <i class="fas fa-edit"></i>
+                                </button>
+                            </td>
+                            <?php endif; ?>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer text-muted small">
+            Tổng: <strong><?= count($customers) ?></strong> khách hàng
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- Modal Thêm/Sửa KH -->
+<div class="modal fade" id="modalCust" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title" id="modalCustTitle">
+                    <i class="fas fa-user-plus me-2"></i>Thêm khách hàng
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formCust">
+                    <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+                    <input type="hidden" name="id" id="custId" value="">
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Mã khách hàng</label>
+                            <input type="text" name="customer_code" id="custCode"
+                                   class="form-control text-uppercase" placeholder="VD: KH-001">
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label fw-semibold">Tên khách hàng <span class="text-danger">*</span></label>
+                            <input type="text" name="customer_name" id="custName"
+                                   class="form-control" placeholder="Tên công ty hoặc cá nhân" required>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Địa chỉ</label>
+                            <input type="text" name="address" id="custAddress"
+                                   class="form-control" placeholder="Địa chỉ đầy đủ">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Người liên hệ</label>
+                            <input type="text" name="contact_person" id="custContact"
+                                   class="form-control" placeholder="Họ tên người liên hệ">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Điện thoại</label>
+                            <input type="text" name="phone" id="custPhone"
+                                   class="form-control" placeholder="0909...">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Email</label>
+                            <input type="email" name="email" id="custEmail"
+                                   class="form-control" placeholder="email@...">
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox"
+                                       name="is_active" id="custActive" value="1" checked>
+                                <label class="form-check-label" for="custActive">Đang giao dịch</label>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Huỷ</button>
+                <button type="button" class="btn btn-primary" id="btnSaveCust">
+                    <i class="fas fa-save me-1"></i>Lưu
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.querySelectorAll('.btn-edit-cust').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.getElementById('modalCustTitle').innerHTML = '<i class="fas fa-edit me-2"></i>Sửa khách hàng';
+        document.getElementById('custId').value      = btn.dataset.id;
+        document.getElementById('custCode').value    = btn.dataset.code;
+        document.getElementById('custName').value    = btn.dataset.name;
+        document.getElementById('custAddress').value = btn.dataset.address;
+        document.getElementById('custContact').value = btn.dataset.contact;
+        document.getElementById('custPhone').value   = btn.dataset.phone;
+        document.getElementById('custEmail').value   = btn.dataset.email;
+        document.getElementById('custActive').checked = btn.dataset.active == '1';
+        new bootstrap.Modal(document.getElementById('modalCust')).show();
+    });
+});
+
+document.getElementById('modalCust').addEventListener('hidden.bs.modal', () => {
+    document.getElementById('modalCustTitle').innerHTML = '<i class="fas fa-user-plus me-2"></i>Thêm khách hàng';
+    document.getElementById('formCust').reset();
+    document.getElementById('custId').value = '';
+});
+
+document.getElementById('btnSaveCust').addEventListener('click', () => {
+    const form = document.getElementById('formCust');
+    if (!form.checkValidity()) { form.reportValidity(); return; }
+
+    const btn = document.getElementById('btnSaveCust');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Đang lưu...';
+
+    const data = new FormData(form);
+    if (!document.getElementById('custActive').checked) data.delete('is_active');
+
+    fetch('/erp/api/master/save_customer.php', { method: 'POST', body: data })
+        .then(r => r.json())
+        .then(res => {
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('modalCust')).hide();
+                location.reload();
+            } else {
+                alert('Lỗi: ' + res.msg);
+            }
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Lưu';
+        });
+});
+</script>
+
+<?php include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/footer.php'; ?>
