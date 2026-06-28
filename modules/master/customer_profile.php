@@ -204,7 +204,8 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                                         data-id="<?= (int)$row['id'] ?>"
                                                         data-product-id="<?= (int)$row['product_code_id'] ?>"
                                                         data-product-text="[<?= htmlspecialchars($row['product_code']) ?>] <?= htmlspecialchars($row['description']) ?>"
-                                                        data-price="<?= htmlspecialchars($row['unit_price']) ?>">
+                                                        data-price="<?= htmlspecialchars($row['unit_price']) ?>"
+                                                        data-effective-date="<?= htmlspecialchars($row['effective_date'] ?? '') ?>">
                                                     <i class="fas fa-edit"></i>
                                                 </button>
                                                 <button class="btn btn-outline-danger btn-sm btn-delete-price"
@@ -424,7 +425,7 @@ document.querySelectorAll('.btn-edit-price').forEach(btn => {
         document.getElementById('priceProductLocked').value = btn.dataset.productId;
         priceProduct.disabled = true;
         document.getElementById('priceValue').value = btn.dataset.price;
-        document.getElementById('priceDate').value = '<?= date('Y-m-d') ?>';
+        document.getElementById('priceDate').value = btn.dataset.effectiveDate || '<?= date('Y-m-d') ?>';
         document.getElementById('priceNote').value = '';
         new bootstrap.Modal(document.getElementById('modalPrice')).show();
     });

@@ -59,7 +59,7 @@ try {
         echo json_encode(['ok' => false, 'msg' => 'Đơn giá không hợp lệ']); exit;
     }
 
-    $expiredDate = date('Y-m-d', strtotime($effectiveDate . ' -1 day'));
+    $priorPeriodEndDate = date('Y-m-d', strtotime($effectiveDate . ' -1 day'));
 
     if ($action === 'edit') {
         if (!$id) {
@@ -78,7 +78,7 @@ try {
 
         $pdo->beginTransaction();
         $pdo->prepare("UPDATE customer_prices SET expired_date = ? WHERE id = ?")
-            ->execute([$expiredDate, $id]);
+            ->execute([$priorPeriodEndDate, $id]);
         $pdo->prepare("
             INSERT INTO customer_prices (customer_id, product_code_id, unit_price, effective_date, expired_date, note, is_active)
             VALUES (?, ?, ?, ?, NULL, ?, 1)
@@ -101,7 +101,7 @@ try {
           AND product_code_id = ?
           AND effective_date <= ?
           AND (expired_date IS NULL OR expired_date >= ?)
-    ")->execute([$expiredDate, $customerId, $productCodeId, $effectiveDate, $effectiveDate]);
+    ")->execute([$priorPeriodEndDate, $customerId, $productCodeId, $effectiveDate, $effectiveDate]);
     $pdo->prepare("
         INSERT INTO customer_prices (customer_id, product_code_id, unit_price, effective_date, expired_date, note, is_active)
         VALUES (?, ?, ?, ?, NULL, ?, 1)
