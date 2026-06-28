@@ -51,9 +51,112 @@ if ($action === 'delete') {
 // ── Xác nhận ─────────────────────────────────────────────────────────────
 if ($action === 'confirm') {
     if (!$id) { echo json_encode(['ok' => false, 'msg' => 'Thiếu ID']); exit; }
-    $pdo->prepare("UPDATE deliveries SET status = 'confirmed' WHERE id = ? AND status = 'draft'")
-        ->execute([$id]);
-    echo json_encode(['ok' => true, 'msg' => 'Đã xác nhận giao hàng — sẵn sàng xuất hoá đơn']);
+    try {
+        $pdo->beginTransaction();
+
+        $pdo->prepare("UPDATE deliveries SET status = 'confirmed' WHERE id = ? AND status = 'draft'")
+            ->execute([$id]);
+
+        // Tự động tạo hoá đơn nháp nếu chưa có
+        $existInv = $pdo->prepare("SELECT id FROM invoices WHERE delivery_id = ?");
+        $existInv->execute([$id]);
+        if (!$existInv->fetch()) {
+            // Lấy thông tin delivery
+            $del = $pdo->prepare("SELECT * FROM deliveries WHERE id = ?");
+            $del->execute([$id]);
+            $del = $del->fetch(PDO::FETCH_ASSOC);
+
+            if ($del) {
+                $invNo = 'INV-DRAFT-' . $del['id'];
+
+                $pdo->prepare("
+                    INSERT INTO invoices (invoice_no, invoice_date, due_date, customer_id, delivery_id,
+                                          subtotal, vat_rate, vat_amount, total_amount, status, note, created_by, created_at)
+                    VALUES (?, NULL, NULL, ?, ?, 0, 0, 0, 0, 'draft', 'Tự động tạo từ phiếu giao hàng', ?, NOW())
+                ")->execute([$invNo, $del['customer_id'], $id, $user['id']]);
+
+                $invoiceId = (int)$pdo->lastInsertId();
+
+                // Copy delivery_items → invoice_items với giá từ customer_prices
+                $items = $pdo->prepare("
+                    SELECT di.*, pc.description, pc.unit
+                    FROM delivery_items di
+                    JOIN product_codes pc ON di.product_code_id = pc.id
+                    WHERE di.delivery_id = ?
+                ");
+                $items->execute([$id]);
+                $items = $items->fetchAll(PDO::FETCH_ASSOC);
+
+                $subtotal = 0;
+
+                // Kiểm tra một lần xem customer_prices có cột effective_date không
+                $hasEffectiveDate = false;
+                $colCheck = $pdo->prepare("
+                    SELECT COUNT(*) FROM information_schema.COLUMNS
+                    WHERE TABLE_SCHEMA = DATABASE()
+                      AND TABLE_NAME = 'customer_prices'
+                      AND COLUMN_NAME = 'effective_date'
+                ");
+                $colCheck->execute();
+                $hasEffectiveDate = (bool)$colCheck->fetchColumn();
+
+                foreach ($items as $item) {
+                    // Lấy giá từ customer_prices
+                    $unitPrice = false;
+                    if ($hasEffectiveDate) {
+                        $priceStmt = $pdo->prepare("
+                            SELECT unit_price FROM customer_prices
+                            WHERE customer_id = ? AND product_code_id = ?
+                              AND effective_date <= CURDATE()
+                              AND (expired_date IS NULL OR expired_date >= CURDATE())
+                              AND is_active = 1
+                            ORDER BY effective_date DESC LIMIT 1
+                        ");
+                    } else {
+                        $priceStmt = $pdo->prepare("
+                            SELECT unit_price FROM customer_prices
+                            WHERE customer_id = ? AND product_code_id = ? AND is_active = 1
+                            ORDER BY id DESC LIMIT 1
+                        ");
+                    }
+                    $priceStmt->execute([$del['customer_id'], $item['product_code_id']]);
+                    $unitPrice = $priceStmt->fetchColumn();
+
+                    // Fallback về giá trong phiếu giao nếu không tìm thấy customer_prices
+                    if ($unitPrice === false || $unitPrice === null) {
+                        $unitPrice = $item['unit_price'] ?? 0;
+                    }
+
+                    $totalPrice = round($item['quantity'] * $unitPrice, 2);
+                    $subtotal  += $totalPrice;
+
+                    $pdo->prepare("
+                        INSERT INTO invoice_items (invoice_id, product_code_id, description, unit, quantity, unit_price, total_price)
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ")->execute([
+                        $invoiceId,
+                        $item['product_code_id'],
+                        $item['description'],
+                        $item['unit'],
+                        $item['quantity'],
+                        $unitPrice,
+                        $totalPrice,
+                    ]);
+                }
+
+                // Cập nhật subtotal và total_amount
+                $pdo->prepare("UPDATE invoices SET subtotal = ?, total_amount = ? WHERE id = ?")
+                    ->execute([$subtotal, $subtotal, $invoiceId]);
+            }
+        }
+
+        $pdo->commit();
+        echo json_encode(['ok' => true, 'msg' => 'Đã xác nhận giao hàng — hoá đơn nháp đã được tạo']);
+    } catch (Throwable $e) {
+        $pdo->rollBack();
+        error_log($e->getMessage());
+        echo json_encode(['ok' => false, 'msg' => 'Lỗi hệ thống: ' . $e->getMessage()]);
+    }
     exit;
 }
 

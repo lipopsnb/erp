@@ -164,10 +164,11 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                 </button>
                                 <?php endif; ?>
                                 <?php if ($dv['status'] === 'confirmed'): ?>
-                                <a href="/erp/modules/invoice/index.php"
-                                   class="btn btn-xs btn-outline-warning ms-1"
-                                   title="Xuất hoá đơn">
-                                    <i class="fas fa-file-invoice"></i> Hoá đơn
+                                <a href="/erp/api/production/print_delivery.php?id=<?= $dv['id'] ?>"
+                                   target="_blank"
+                                   class="btn btn-xs btn-outline-secondary ms-1"
+                                   title="In biên bản giao hàng">
+                                    <i class="fas fa-print me-1"></i>In biên bản
                                 </a>
                                 <?php endif; ?>
                             </td>

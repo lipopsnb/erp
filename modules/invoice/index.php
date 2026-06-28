@@ -13,10 +13,17 @@ $filterTo     = $_GET['to']     ?? date('Y-m-d');
 $filterCust   = trim($_GET['cust']   ?? '');
 $filterStatus = $_GET['status'] ?? '';
 
-$where  = ['i.invoice_date BETWEEN ? AND ?'];
-$params = [$filterFrom, $filterTo];
+// Khi lọc theo trạng thái nháp (draft), bỏ điều kiện ngày vì invoice_date = NULL
+$where  = [];
+$params = [];
+if ($filterStatus !== 'draft') {
+    $where[]  = 'i.invoice_date BETWEEN ? AND ?';
+    $params[] = $filterFrom;
+    $params[] = $filterTo;
+}
 if ($filterCust) { $where[] = 'c.customer_name LIKE ?'; $params[] = "%$filterCust%"; }
 if ($filterStatus) { $where[] = 'i.status = ?'; $params[] = $filterStatus; }
+if (empty($where)) { $where[] = '1=1'; }
 
 $invoices = $pdo->prepare("
     SELECT i.*,
@@ -46,7 +53,7 @@ $productList = $pdo->query("
     SELECT pc.id, pc.product_code, pc.description, pc.unit,
            COALESCE(p.unit_price,0) AS unit_price
     FROM product_codes pc
-    LEFT JOIN prices p ON p.product_code_id = pc.id AND p.is_active = 1
+    LEFT JOIN prices p ON p.product_code_id = pc.id
     WHERE pc.is_active = 1 ORDER BY pc.product_code
 ")->fetchAll(PDO::FETCH_ASSOC);
 
@@ -61,6 +68,8 @@ $pendingDeliveries = $pdo->query("
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $csrf = generateCSRF();
+
+$draftCount = $pdo->query("SELECT COUNT(*) FROM invoices WHERE status = 'draft'")->fetchColumn();
 include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/header.php';
 include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 ?>
@@ -70,7 +79,11 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
-            <h4 class="mb-1"><i class="fas fa-file-invoice me-2 text-primary"></i>Ho�� đơn</h4>
+            <h4 class="mb-1"><i class="fas fa-file-invoice me-2 text-primary"></i>Hoá đơn
+                <?php if ($draftCount > 0): ?>
+                <span class="badge bg-warning text-dark ms-2"><?= $draftCount ?> chờ xuất</span>
+                <?php endif; ?>
+            </h4>
             <p class="text-muted mb-0">Quản lý hoá đơn bán hàng</p>
         </div>
         <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalInvoice">
@@ -120,6 +133,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                 <div class="col-md-2">
                     <select name="status" class="form-select form-select-sm">
                         <option value="">-- Trạng thái --</option>
+                        <option value="draft"    <?= $filterStatus==='draft'    ?'selected':'' ?>>Chờ xuất hoá đơn</option>
                         <option value="unpaid"   <?= $filterStatus==='unpaid'   ?'selected':'' ?>>Chưa thanh toán</option>
                         <option value="partial"  <?= $filterStatus==='partial'  ?'selected':'' ?>>Thanh toán 1 phần</option>
                         <option value="paid"     <?= $filterStatus==='paid'     ?'selected':'' ?>>Đã thanh toán</option>
@@ -160,7 +174,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                     <?php else: ?>
                         <?php foreach ($invoices as $inv):
                             $debt    = $inv['total_amount'] - $inv['paid_amount'];
-                            $overdue = $inv['due_date'] && $inv['status'] !== 'paid' && $inv['due_date'] < date('Y-m-d');
+                            $overdue = $inv['due_date'] && $inv['status'] !== 'paid' && $inv['status'] !== 'draft' && $inv['due_date'] < date('Y-m-d');
                         ?>
                         <tr class="<?= $overdue ? 'table-danger' : '' ?>">
                             <td class="fw-semibold text-primary">
@@ -169,7 +183,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                     <span class="badge bg-danger ms-1">Quá hạn</span>
                                 <?php endif; ?>
                             </td>
-                            <td><?= date('d/m/Y', strtotime($inv['invoice_date'])) ?></td>
+                            <td><?= $inv['invoice_date'] ? date('d/m/Y', strtotime($inv['invoice_date'])) : '<span class="text-muted">—</span>' ?></td>
                             <td class="fw-semibold"><?= htmlspecialchars($inv['customer_name'] ?? '—') ?></td>
                             <td class="text-end"><?= number_format($inv['total_amount']) ?> đ</td>
                             <td class="text-end text-success"><?= number_format($inv['paid_amount']) ?> đ</td>
@@ -179,10 +193,11 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <td>
                                 <?php
                                 $st = [
-                                    'unpaid'    => ['danger',  'Chưa TT'],
-                                    'partial'   => ['warning', '1 phần'],
-                                    'paid'      => ['success', 'Đã TT'],
-                                    'cancelled' => ['secondary','Huỷ'],
+                                    'draft'     => ['secondary', 'Chờ xuất'],
+                                    'unpaid'    => ['danger',    'Chưa TT'],
+                                    'partial'   => ['warning',   '1 phần'],
+                                    'paid'      => ['success',   'Đã TT'],
+                                    'cancelled' => ['secondary', 'Huỷ'],
                                 ];
                                 $s = $st[$inv['status']] ?? ['secondary','?'];
                                 echo "<span class='badge bg-{$s[0]}'>{$s[1]}</span>";
@@ -196,7 +211,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                    class="btn btn-sm btn-outline-primary">
                                     <i class="fas fa-eye"></i>
                                 </a>
-                                <?php if ($inv['status'] !== 'paid' && $inv['status'] !== 'cancelled'): ?>
+                                <?php if ($inv['status'] !== 'paid' && $inv['status'] !== 'cancelled' && $inv['status'] !== 'draft'): ?>
                                 <button class="btn btn-sm btn-outline-success btn-pay"
                                         data-id="<?= $inv['id'] ?>"
                                         data-no="<?= htmlspecialchars($inv['invoice_no']) ?>"
