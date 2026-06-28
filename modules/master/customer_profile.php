@@ -25,10 +25,20 @@ $currentStmt = $pdo->prepare("
     SELECT cp.*, pc.product_code, pc.description, pc.unit
     FROM customer_prices cp
     JOIN product_codes pc ON cp.product_code_id = pc.id
+    LEFT JOIN customer_prices cp_newer
+           ON cp_newer.customer_id = cp.customer_id
+          AND cp_newer.product_code_id = cp.product_code_id
+          AND cp_newer.effective_date <= CURDATE()
+          AND (cp_newer.expired_date IS NULL OR cp_newer.expired_date >= CURDATE())
+          AND (
+               cp_newer.effective_date > cp.effective_date
+               OR (cp_newer.effective_date = cp.effective_date AND cp_newer.id > cp.id)
+          )
     WHERE cp.customer_id = ?
       AND cp.effective_date <= CURDATE()
       AND (cp.expired_date IS NULL OR cp.expired_date >= CURDATE())
-    ORDER BY pc.product_code, cp.effective_date DESC, cp.id DESC
+      AND cp_newer.id IS NULL
+    ORDER BY pc.product_code
 ");
 $currentStmt->execute([$id]);
 $currentPrices = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -148,7 +158,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                 <?php endif; ?>
                                 <?php if (hasRole('director')): ?>
                                 <button class="btn btn-outline-danger btn-sm" id="btnDeleteCustomer">
-                                    <i class="fas fa-trash me-1"></i>Xóa KH
+                                    <i class="fas fa-trash me-1"></i>Xoá KH
                                 </button>
                                 <?php endif; ?>
                             </div>
@@ -371,7 +381,7 @@ document.getElementById('btnSaveCustomer')?.addEventListener('click', () => {
 });
 
 document.getElementById('btnDeleteCustomer')?.addEventListener('click', () => {
-    if (!confirm('Xác nhận xóa khách hàng?')) return;
+    if (!confirm('Xác nhận xoá khách hàng?')) return;
     const fd = new FormData();
     fd.append('csrf_token', csrf);
     fd.append('action', 'delete');

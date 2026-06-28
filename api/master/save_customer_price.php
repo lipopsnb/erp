@@ -24,7 +24,7 @@ if ($action === 'save') {
     $action = $id ? 'edit' : 'add';
 }
 
-$isValidDate = static function ($date): bool {
+$isValidDate = function ($date): bool {
     if (!$date) return false;
     $d = DateTime::createFromFormat('Y-m-d', $date);
     return $d && $d->format('Y-m-d') === $date;

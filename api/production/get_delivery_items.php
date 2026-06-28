@@ -17,18 +17,26 @@ if (!$warehouseOutId) { echo json_encode(['ok' => false, 'msg' => 'Missing wareh
 $items = $pdo->prepare("
     SELECT woi.product_code_id, woi.quantity,
            pc.product_code, pc.description, pc.unit,
-           COALESCE((
-               SELECT cp.unit_price
-               FROM customer_prices cp
-               WHERE cp.product_code_id = woi.product_code_id
-                 AND cp.customer_id = ?
-                 AND cp.effective_date <= CURDATE()
-                 AND (cp.expired_date IS NULL OR cp.expired_date >= CURDATE())
-               ORDER BY cp.effective_date DESC, cp.id DESC
-               LIMIT 1
-           ), 0) AS unit_price
+           COALESCE(cp_latest.unit_price, 0) AS unit_price
     FROM warehouse_out_items woi
     JOIN product_codes pc ON woi.product_code_id = pc.id
+    LEFT JOIN (
+        SELECT cp1.product_code_id, cp1.unit_price
+        FROM customer_prices cp1
+        LEFT JOIN customer_prices cp2
+               ON cp2.customer_id = cp1.customer_id
+              AND cp2.product_code_id = cp1.product_code_id
+              AND cp2.effective_date <= CURDATE()
+              AND (cp2.expired_date IS NULL OR cp2.expired_date >= CURDATE())
+              AND (
+                   cp2.effective_date > cp1.effective_date
+                   OR (cp2.effective_date = cp1.effective_date AND cp2.id > cp1.id)
+              )
+        WHERE cp1.customer_id = ?
+          AND cp1.effective_date <= CURDATE()
+          AND (cp1.expired_date IS NULL OR cp1.expired_date >= CURDATE())
+          AND cp2.id IS NULL
+    ) cp_latest ON cp_latest.product_code_id = woi.product_code_id
     WHERE woi.warehouse_out_id = ?
     ORDER BY woi.id
 ");
