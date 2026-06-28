@@ -40,7 +40,6 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/header.php';
 include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 ?>
 <div class="main-content">
-<?php include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/warehouse_nav.php'; ?>
 <div class="container-fluid py-4">
 
     <?php showFlash(); ?>
