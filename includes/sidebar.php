@@ -151,6 +151,58 @@ $sidebarUser = currentUser();
         </li>
         <?php endif; ?>
 
+        <!-- ==================== GIA CÔNG (MODULE 2) ==================== -->
+        <?php if (hasRole('director','accountant','warehouse','production','manager')): ?>
+        <li class="nav-section">GIA CÔNG</li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/production/warehouse_in') ?>"
+               href="/erp/modules/production/warehouse_in.php">
+                <i class="fas fa-file-import"></i> <span>Nhập kho NVL</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/production/wo_processes') ?>"
+               href="/erp/modules/production/wo_processes.php">
+                <i class="fas fa-cogs"></i> <span>Tiến độ gia công</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/warehouse/warehouse_items') ?>"
+               href="/erp/modules/warehouse/warehouse_items.php">
+                <i class="fas fa-boxes"></i> <span>Kho thành phẩm</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/production/warehouse_out') ?>"
+               href="/erp/modules/production/warehouse_out.php">
+                <i class="fas fa-file-export"></i> <span>Xuất kho</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/production/deliveries') ?>"
+               href="/erp/modules/production/deliveries.php">
+                <i class="fas fa-truck"></i> <span>Giao hàng</span>
+            </a>
+        </li>
+        <?php endif; ?>
+
+        <!-- ==================== HOÁ ĐƠN & CÔNG NỢ ==================== -->
+        <?php if (hasRole('director','accountant','manager')): ?>
+        <li class="nav-section">HOÁ ĐƠN</li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/invoice/index') ?>"
+               href="/erp/modules/invoice/index.php">
+                <i class="fas fa-file-invoice"></i> <span>Hoá đơn</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/invoice/debt') ?>"
+               href="/erp/modules/invoice/debt.php">
+                <i class="fas fa-hand-holding-usd"></i> <span>Công nợ</span>
+            </a>
+        </li>
+        <?php endif; ?>
+
         <!-- ==================== KPI SẢN XUẤT ==================== -->
 <?php if (hasRole('director', 'accountant', 'manager', 'warehouse', 'production')): ?>
 <li class="nav-section">KPI SẢN XUẤT</li>

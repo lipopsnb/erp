@@ -37,6 +37,12 @@ if (!function_exists('isActiveNav')) {
                     <i class="fas fa-tags"></i> Bảng giá
                 </a>
             </li>
+            <li>
+                <a href="/erp/modules/master/customer_prices.php"
+                   class="<?= isActiveNav('/master/customer_prices') ?>">
+                    <i class="fas fa-dollar-sign"></i> Giá theo KH
+                </a>
+            </li>
             <?php endif; ?>
 
             <?php if (hasRole('director','accountant','warehouse','manager')): ?>
@@ -87,6 +93,41 @@ if (!function_exists('isActiveNav')) {
                 <a href="/erp/modules/production/delivery.php"
                    class="<?= isActiveNav('/production/delivery') ?>">
                     <i class="fas fa-shipping-fast"></i> Biên bản giao hàng
+                </a>
+            </li>
+            <?php endif; ?>
+
+            <?php if (hasRole('director','accountant','warehouse','production','manager')): ?>
+            <!-- MODULE 2: GIA CÔNG -->
+            <li class="nav-group-label">Gia công (M2)</li>
+            <li>
+                <a href="/erp/modules/production/warehouse_in.php"
+                   class="<?= isActiveNav('/production/warehouse_in') ?>">
+                    <i class="fas fa-file-import"></i> Nhập kho NVL
+                </a>
+            </li>
+            <li>
+                <a href="/erp/modules/production/wo_processes.php"
+                   class="<?= isActiveNav('/production/wo_processes') ?>">
+                    <i class="fas fa-cogs"></i> Tiến độ gia công
+                </a>
+            </li>
+            <li>
+                <a href="/erp/modules/warehouse/warehouse_items.php"
+                   class="<?= isActiveNav('/warehouse/warehouse_items') ?>">
+                    <i class="fas fa-boxes"></i> Kho thành phẩm
+                </a>
+            </li>
+            <li>
+                <a href="/erp/modules/production/warehouse_out.php"
+                   class="<?= isActiveNav('/production/warehouse_out') ?>">
+                    <i class="fas fa-file-export"></i> Xuất kho
+                </a>
+            </li>
+            <li>
+                <a href="/erp/modules/production/deliveries.php"
+                   class="<?= isActiveNav('/production/deliveries') ?>">
+                    <i class="fas fa-truck"></i> Giao hàng (M2)
                 </a>
             </li>
             <?php endif; ?>
