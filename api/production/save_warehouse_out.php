@@ -57,16 +57,21 @@ if ($action === 'confirm') {
         $pdo->prepare("UPDATE warehouse_out SET status = 'confirmed' WHERE id = ? AND status = 'draft'")
             ->execute([$id]);
 
-        // Cập nhật warehouse_items → delivered
+        // Cập nhật warehouse_items → delivered (với kiểm tra không vượt quantity)
         $outItems = $pdo->prepare("SELECT warehouse_item_id, quantity FROM warehouse_out_items WHERE warehouse_out_id = ?");
         $outItems->execute([$id]);
         foreach ($outItems->fetchAll() as $oi) {
+            $wiRow = $pdo->prepare("SELECT quantity, quantity_delivered FROM warehouse_items WHERE id = ? FOR UPDATE");
+            $wiRow->execute([$oi['warehouse_item_id']]);
+            $wi = $wiRow->fetch();
+            if (!$wi) continue;
+            $newDelivered = min($wi['quantity'], $wi['quantity_delivered'] + $oi['quantity']);
             $pdo->prepare("
                 UPDATE warehouse_items
                 SET status = 'delivered',
-                    quantity_delivered = quantity_delivered + ?
+                    quantity_delivered = ?
                 WHERE id = ?
-            ")->execute([$oi['quantity'], $oi['warehouse_item_id']]);
+            ")->execute([$newDelivered, $oi['warehouse_item_id']]);
         }
 
         $pdo->commit();

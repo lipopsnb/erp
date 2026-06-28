@@ -163,3 +163,75 @@ CREATE TABLE IF NOT EXISTS document_sequences (
     last_seq  INT         NOT NULL DEFAULT 0,
     PRIMARY KEY (doc_type, doc_date)
 );
+
+-- ============================================================
+-- Khóa ngoại (chạy sau khi tất cả bảng đã tồn tại)
+-- Bỏ qua nếu gặp lỗi (bảng customers/product_codes/users có thể đã tồn tại)
+-- ============================================================
+
+-- customer_prices
+ALTER TABLE customer_prices
+    ADD CONSTRAINT fk_cp_customer FOREIGN KEY (customer_id)     REFERENCES customers(id)     ON DELETE CASCADE,
+    ADD CONSTRAINT fk_cp_product  FOREIGN KEY (product_code_id) REFERENCES product_codes(id) ON DELETE CASCADE;
+
+-- warehouse_in
+ALTER TABLE warehouse_in
+    ADD CONSTRAINT fk_wi_customer   FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
+    ADD CONSTRAINT fk_wi_created_by FOREIGN KEY (created_by)  REFERENCES users(id)     ON DELETE SET NULL;
+
+-- warehouse_in_items
+ALTER TABLE warehouse_in_items
+    ADD CONSTRAINT fk_wii_wi      FOREIGN KEY (warehouse_in_id)  REFERENCES warehouse_in(id)  ON DELETE CASCADE,
+    ADD CONSTRAINT fk_wii_product FOREIGN KEY (product_code_id)  REFERENCES product_codes(id) ON DELETE RESTRICT;
+
+-- wo_processes
+ALTER TABLE wo_processes
+    ADD CONSTRAINT fk_wop_wi     FOREIGN KEY (warehouse_in_id)      REFERENCES warehouse_in(id)       ON DELETE CASCADE,
+    ADD CONSTRAINT fk_wop_wii    FOREIGN KEY (warehouse_in_item_id) REFERENCES warehouse_in_items(id) ON DELETE SET NULL,
+    ADD CONSTRAINT fk_wop_pc     FOREIGN KEY (product_code_id)      REFERENCES product_codes(id)      ON DELETE RESTRICT,
+    ADD CONSTRAINT fk_wop_user   FOREIGN KEY (updated_by)           REFERENCES users(id)              ON DELETE SET NULL;
+
+-- warehouse_items
+ALTER TABLE warehouse_items
+    ADD CONSTRAINT fk_witm_wi    FOREIGN KEY (warehouse_in_id)  REFERENCES warehouse_in(id)  ON DELETE SET NULL,
+    ADD CONSTRAINT fk_witm_wop   FOREIGN KEY (wo_process_id)    REFERENCES wo_processes(id)  ON DELETE SET NULL,
+    ADD CONSTRAINT fk_witm_pc    FOREIGN KEY (product_code_id)  REFERENCES product_codes(id) ON DELETE RESTRICT,
+    ADD CONSTRAINT fk_witm_cust  FOREIGN KEY (customer_id)      REFERENCES customers(id)     ON DELETE RESTRICT;
+
+-- warehouse_out
+ALTER TABLE warehouse_out
+    ADD CONSTRAINT fk_wo_customer   FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE RESTRICT,
+    ADD CONSTRAINT fk_wo_created_by FOREIGN KEY (created_by)  REFERENCES users(id)     ON DELETE SET NULL;
+
+-- warehouse_out_items
+ALTER TABLE warehouse_out_items
+    ADD CONSTRAINT fk_woi_wo     FOREIGN KEY (warehouse_out_id)  REFERENCES warehouse_out(id)   ON DELETE CASCADE,
+    ADD CONSTRAINT fk_woi_witm   FOREIGN KEY (warehouse_item_id) REFERENCES warehouse_items(id) ON DELETE RESTRICT,
+    ADD CONSTRAINT fk_woi_pc     FOREIGN KEY (product_code_id)   REFERENCES product_codes(id)   ON DELETE RESTRICT;
+
+-- deliveries
+ALTER TABLE deliveries
+    ADD CONSTRAINT fk_dl_customer FOREIGN KEY (customer_id)      REFERENCES customers(id)    ON DELETE RESTRICT,
+    ADD CONSTRAINT fk_dl_wo       FOREIGN KEY (warehouse_out_id) REFERENCES warehouse_out(id) ON DELETE SET NULL,
+    ADD CONSTRAINT fk_dl_user     FOREIGN KEY (created_by)       REFERENCES users(id)         ON DELETE SET NULL;
+
+-- delivery_items
+ALTER TABLE delivery_items
+    ADD CONSTRAINT fk_dli_dl  FOREIGN KEY (delivery_id)     REFERENCES deliveries(id)    ON DELETE CASCADE,
+    ADD CONSTRAINT fk_dli_pc  FOREIGN KEY (product_code_id) REFERENCES product_codes(id) ON DELETE RESTRICT;
+
+-- invoices
+ALTER TABLE invoices
+    ADD CONSTRAINT fk_inv_customer  FOREIGN KEY (customer_id)  REFERENCES customers(id)  ON DELETE RESTRICT,
+    ADD CONSTRAINT fk_inv_delivery  FOREIGN KEY (delivery_id)  REFERENCES deliveries(id) ON DELETE SET NULL,
+    ADD CONSTRAINT fk_inv_user      FOREIGN KEY (created_by)   REFERENCES users(id)      ON DELETE SET NULL;
+
+-- invoice_items
+ALTER TABLE invoice_items
+    ADD CONSTRAINT fk_ii_inv FOREIGN KEY (invoice_id)      REFERENCES invoices(id)      ON DELETE CASCADE,
+    ADD CONSTRAINT fk_ii_pc  FOREIGN KEY (product_code_id) REFERENCES product_codes(id) ON DELETE RESTRICT;
+
+-- payments
+ALTER TABLE payments
+    ADD CONSTRAINT fk_pay_inv  FOREIGN KEY (invoice_id) REFERENCES invoices(id) ON DELETE RESTRICT,
+    ADD CONSTRAINT fk_pay_user FOREIGN KEY (created_by) REFERENCES users(id)    ON DELETE SET NULL;

@@ -73,12 +73,13 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
         foreach ($statConfig as $key => [$bg, $icon, $label]):
             $cnt = $statMap[$key]['cnt'] ?? 0;
             $qty = $statMap[$key]['total_qty'] ?? 0;
+            $bgColor = explode('-', $bg)[1] ?? '';
         ?>
         <div class="col-md-3">
             <a href="?status=<?= $key ?>" class="text-decoration-none">
                 <div class="card border-0 shadow-sm <?= $filterStatus === $key ? 'border border-2 border-dark' : '' ?>">
                     <div class="card-body py-3 d-flex align-items-center gap-3">
-                        <div class="rounded-circle p-2 bg-<?= explode('-', $bg)[1] ?? '' ?>-subtle text-<?= explode('-', $bg)[1] ?? '' ?> fs-4">
+                        <div class="rounded-circle p-2 bg-<?= $bgColor ?>-subtle text-<?= $bgColor ?> fs-4">
                             <i class="fas <?= $icon ?>"></i>
                         </div>
                         <div>

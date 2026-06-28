@@ -95,8 +95,18 @@ try {
 
         // Khi status = done → tạo / cập nhật warehouse_items
         if ($status === 'done') {
-            // Xoá warehouse_items cũ liên kết với wo_process này
-            $pdo->prepare("DELETE FROM warehouse_items WHERE wo_process_id = ?")->execute([$woId]);
+            // Chỉ xoá warehouse_items chưa được xuất kho/giao hàng
+            $linked = $pdo->prepare("
+                SELECT COUNT(*) FROM warehouse_items wi
+                WHERE wi.wo_process_id = ?
+                  AND wi.status IN ('delivered')
+            ");
+            $linked->execute([$woId]);
+            if ((int)$linked->fetchColumn() > 0) {
+                // Không xoá — hàng đã được giao, chỉ cập nhật wo_processes
+                continue;
+            }
+            $pdo->prepare("DELETE FROM warehouse_items WHERE wo_process_id = ? AND status NOT IN ('delivered')")->execute([$woId]);
 
             // Thành phẩm đạt
             if ($qtyDone > 0) {
