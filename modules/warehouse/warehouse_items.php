@@ -146,7 +146,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                     </thead>
                     <tbody>
                     <?php if (empty($items)): ?>
-                        <tr><td colspan="10" class="text-center text-muted py-4">Chưa có dữ liệu</td></tr>
+                        <tr><td colspan="<?= hasRole('director') ? 10 : 9 ?>" class="text-center text-muted py-4">Chưa có dữ liệu</td></tr>
                     <?php else: ?>
                         <?php foreach ($items as $i => $it):
                             $statusCfg = [

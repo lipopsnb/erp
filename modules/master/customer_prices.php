@@ -291,8 +291,6 @@ document.querySelectorAll('.btn-delete-price').forEach(btn => {
         fd.append('csrf_token', csrf);
         fd.append('action', 'delete');
         fd.append('id', btn.dataset.id);
-        fd.append('customer_id', 0);
-        fd.append('product_code_id', 0);
         fetch('/erp/api/master/save_customer_price.php', { method: 'POST', body: fd })
             .then(r => r.json())
             .then(d => {

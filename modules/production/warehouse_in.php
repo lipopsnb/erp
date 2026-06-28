@@ -277,11 +277,15 @@ const csrf   = '<?= $csrf ?>';
 const productList = <?= json_encode($productList, JSON_UNESCAPED_UNICODE) ?>;
 let rowIndex = 0;
 
+function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function buildProductOptions(selected = 0) {
     let opts = '<option value="">-- Chọn mã SP --</option>';
     productList.forEach(p => {
-        opts += `<option value="${p.id}" data-unit="${p.unit || ''}" ${p.id == selected ? 'selected' : ''}>
-                    [${p.product_code}] ${p.description} (${p.unit || ''})
+        opts += `<option value="${p.id}" data-unit="${escHtml(p.unit)}" ${p.id == selected ? 'selected' : ''}>
+                    [${escHtml(p.product_code)}] ${escHtml(p.description)} (${escHtml(p.unit)})
                  </option>`;
     });
     return opts;

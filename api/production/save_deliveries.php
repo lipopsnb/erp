@@ -113,9 +113,9 @@ try {
             INSERT INTO document_sequences (doc_type, doc_date, last_seq) VALUES ('DL',?,1)
             ON DUPLICATE KEY UPDATE last_seq = last_seq + 1
         ")->execute([$deliveryDate]);
-        $seq = (int)$pdo->query("
-            SELECT last_seq FROM document_sequences WHERE doc_type='DL' AND doc_date='$deliveryDate'
-        ")->fetchColumn();
+        $seqStmt = $pdo->prepare("SELECT last_seq FROM document_sequences WHERE doc_type='DL' AND doc_date=?");
+        $seqStmt->execute([$deliveryDate]);
+        $seq = (int)$seqStmt->fetchColumn();
         $deliveryNo = 'DL-' . date('Ymd', strtotime($deliveryDate)) . '-' . str_pad($seq, 3, '0', STR_PAD_LEFT);
 
         $pdo->prepare("

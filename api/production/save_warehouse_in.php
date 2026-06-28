@@ -112,9 +112,9 @@ try {
             INSERT INTO document_sequences (doc_type, doc_date, last_seq) VALUES ('WI',?,1)
             ON DUPLICATE KEY UPDATE last_seq = last_seq + 1
         ")->execute([$receiptDate]);
-        $seq = (int)$pdo->query("
-            SELECT last_seq FROM document_sequences WHERE doc_type='WI' AND doc_date='$receiptDate'
-        ")->fetchColumn();
+        $seqStmt = $pdo->prepare("SELECT last_seq FROM document_sequences WHERE doc_type='WI' AND doc_date=?");
+        $seqStmt->execute([$receiptDate]);
+        $seq = (int)$seqStmt->fetchColumn();
         $receiptNo = 'WI-' . date('Ymd', strtotime($receiptDate)) . '-' . str_pad($seq, 3, '0', STR_PAD_LEFT);
 
         $pdo->prepare("

@@ -80,7 +80,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 
     <?php foreach ($receiptList as $r):
         // Lấy items của phiếu
-        $wItems = $pdo->prepare("
+        $wItemsStmt = $pdo->prepare("
             SELECT wii.*,
                    pc.product_code, pc.description, pc.unit,
                    wp.id AS wp_id, wp.quantity_input, wp.quantity_done,
@@ -93,8 +93,8 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
             WHERE wii.warehouse_in_id = ?
             ORDER BY wii.id
         ");
-        $wItems->execute([$r['id']]);
-        $wItems = $wItems->fetchAll(PDO::FETCH_ASSOC);
+        $wItemsStmt->execute([$r['id']]);
+        $wItems = $wItemsStmt->fetchAll(PDO::FETCH_ASSOC);
         $statusMap = [
             'open'       => ['bg-warning text-dark', 'Mở'],
             'processing' => ['bg-info text-white',   'Đang gia công'],

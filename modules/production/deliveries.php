@@ -299,17 +299,20 @@ const productList = <?= json_encode(
 ) ?>;
 let dlRowIdx = 0;
 
+function escHtml(s) {
+    return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
 function buildPcOptions(selected = 0) {
     let o = '<option value="">-- Chọn mã SP --</option>';
     productList.forEach(p => {
-        o += `<option value="${p.id}" data-unit="${p.unit||''}" ${p.id==selected?'selected':''}>[${p.product_code}] ${p.description}</option>`;
+        o += `<option value="${p.id}" data-unit="${escHtml(p.unit)}" ${p.id==selected?'selected':''}>[${escHtml(p.product_code)}] ${escHtml(p.description)}</option>`;
     });
     return o;
 }
 
 function calcTotal() {
     let total = 0;
-    document.querySelectorAll('.dl-qty,.dl-price').forEach(() => {});
     document.querySelectorAll('#dlItems tr').forEach(tr => {
         const qty   = parseFloat(tr.querySelector('.dl-qty')?.value   || 0);
         const price = parseFloat(tr.querySelector('.dl-price')?.value || 0);

@@ -127,9 +127,9 @@ try {
             INSERT INTO document_sequences (doc_type, doc_date, last_seq) VALUES ('WO',?,1)
             ON DUPLICATE KEY UPDATE last_seq = last_seq + 1
         ")->execute([$exportDate]);
-        $seq = (int)$pdo->query("
-            SELECT last_seq FROM document_sequences WHERE doc_type='WO' AND doc_date='$exportDate'
-        ")->fetchColumn();
+        $seqStmt = $pdo->prepare("SELECT last_seq FROM document_sequences WHERE doc_type='WO' AND doc_date=?");
+        $seqStmt->execute([$exportDate]);
+        $seq = (int)$seqStmt->fetchColumn();
         $exportNo = 'WO-' . date('Ymd', strtotime($exportDate)) . '-' . str_pad($seq, 3, '0', STR_PAD_LEFT);
 
         $pdo->prepare("

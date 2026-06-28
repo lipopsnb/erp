@@ -264,9 +264,9 @@ document.getElementById('btnLoadItems').addEventListener('click', () => {
                             <input type="hidden" name="items[${i}][product_code_id]"   value="${it.product_code_id}">
                         </td>
                         <td class="small">${it.description || ''}</td>
-                        <td class="text-end">${parseFloat(it.quantity).toLocaleString()}</td>
+                        <td class="text-end">${parseFloat(it.quantity || 0).toLocaleString()}</td>
                         <td><input type="number" name="items[${i}][quantity]" class="form-control form-control-sm text-end"
-                                   value="${it.quantity}" min="0.001" max="${it.quantity}" step="0.001"></td>
+                                   value="${parseFloat(it.quantity || 0)}" min="0.001" max="${parseFloat(it.quantity || 0)}" step="0.001"></td>
                         <td><input type="text" name="items[${i}][note]" class="form-control form-control-sm" placeholder="..."></td>
                     </tr>`;
                 });
