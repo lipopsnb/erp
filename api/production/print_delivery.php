@@ -9,7 +9,7 @@ if (!$id) die('Không tìm thấy biên bản');
 
 $delivery = $pdo->prepare("
     SELECT d.*,
-           c.customer_name, c.customer_code, c.address, c.phone, c.tax_code
+           c.customer_name, c.customer_code, c.address, c.phone
     FROM deliveries d
     LEFT JOIN customers c ON d.customer_id = c.id
     WHERE d.id = ?
@@ -97,12 +97,6 @@ $totalAmount = $delivery['total_amount'] ?? array_sum(array_column($items, 'tota
             letter-spacing: 2px;
             color: #111;
         }
-        .doc-no-date {
-            font-size: 12px;
-            color: #444;
-            margin-top: 3px;
-        }
-        .doc-no-date b { color: #c62828; }
 
         /* ── THÔNG TIN DẠNG DÒNG KẺ ── */
         .info-section {
@@ -136,7 +130,6 @@ $totalAmount = $delivery['total_amount'] ?? array_sum(array_column($items, 'tota
             border-bottom: 1px dotted #555;
             min-width: 40px;
             margin-bottom: 2px;
-            /* value shown inline */
             padding: 0 4px;
             font-size: 13px;
             color: #111;
@@ -188,17 +181,6 @@ $totalAmount = $delivery['total_amount'] ?? array_sum(array_column($items, 'tota
             color: #222;
         }
         .total-box b { color: #c62828; font-style: normal; }
-
-        /* ── GHI CHÚ KHÁCH ── */
-        .customer-note {
-            margin-top: 10px;
-            padding: 6px 10px;
-            border: 1px dashed #999;
-            border-radius: 3px;
-            font-size: 11.5px;
-            color: #444;
-        }
-        .customer-note b { color: #111; }
 
         /* ── LỜI CẢM ƠN ── */
         .thank-note {
@@ -367,7 +349,6 @@ $totalAmount = $delivery['total_amount'] ?? array_sum(array_column($items, 'tota
             </thead>
             <tbody>
             <?php
-            // Đảm bảo ít nhất 8 dòng để trống như mẫu
             $minRows = max(8, count($items));
             for ($i = 0; $i < $minRows; $i++):
                 $it = $items[$i] ?? null;
