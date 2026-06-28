@@ -56,6 +56,11 @@ if (hasRole('employee')) {
 $latestPeriod    = null;
 $myLatestSlip    = null;
 $pendingPayrolls = 0;
+$adminWarnings = [
+    'expiring_30' => 0,
+    'expiring_60' => 0,
+    'pending_expenses' => 0,
+];
 
 // Kỳ lương mới nhất
 $latestPeriod = $pdo->query("
@@ -80,6 +85,27 @@ $myLatestSlip = $stmtSlip->fetch();
 if (hasRole('director')) {
     $pendingPayrolls = (int)$pdo->query("
         SELECT COUNT(*) FROM payroll_periods WHERE status = 'submitted'
+    ")->fetchColumn();
+}
+
+if (hasRole('director', 'accountant', 'manager')) {
+    $adminWarnings['expiring_30'] = (int)$pdo->query("
+        SELECT COUNT(DISTINCT vehicle_id)
+        FROM vehicle_documents
+        WHERE end_date BETWEEN CURDATE() AND DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+    ")->fetchColumn();
+
+    $adminWarnings['expiring_60'] = (int)$pdo->query("
+        SELECT COUNT(DISTINCT vehicle_id)
+        FROM vehicle_documents
+        WHERE end_date > DATE_ADD(CURDATE(), INTERVAL 30 DAY)
+          AND end_date <= DATE_ADD(CURDATE(), INTERVAL 60 DAY)
+    ")->fetchColumn();
+
+    $adminWarnings['pending_expenses'] = (int)$pdo->query("
+        SELECT COUNT(*)
+        FROM expense_requests
+        WHERE status = 'submitted'
     ")->fetchColumn();
 }
 
@@ -285,6 +311,44 @@ include 'includes/sidebar.php';
             <?php endif; ?>
 
         </div>
+
+        <?php if (hasRole('director', 'accountant', 'manager') && array_sum($adminWarnings) > 0): ?>
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <a href="/erp/modules/admin/vehicles.php" class="text-decoration-none">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <p class="text-muted small mb-1">🔴 Xe sắp hết hạn trong 30 ngày</p>
+                            <h3 class="mb-1 text-danger"><?= $adminWarnings['expiring_30'] ?></h3>
+                            <small class="text-muted">Đăng kiểm / bảo hiểm / bảo dưỡng</small>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="/erp/modules/admin/vehicles.php" class="text-decoration-none">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <p class="text-muted small mb-1">🟡 Xe sắp hết hạn 31-60 ngày</p>
+                            <h3 class="mb-1 text-warning"><?= $adminWarnings['expiring_60'] ?></h3>
+                            <small class="text-muted">Chủ động gia hạn hồ sơ xe</small>
+                        </div>
+                    </div>
+                </a>
+            </div>
+            <div class="col-md-4">
+                <a href="/erp/modules/admin/expenses.php?status=submitted&month=<?= date('Y-m') ?>" class="text-decoration-none">
+                    <div class="card border-0 shadow-sm h-100">
+                        <div class="card-body">
+                            <p class="text-muted small mb-1">🔵 Đề xuất chi phí chờ duyệt</p>
+                            <h3 class="mb-1 text-primary"><?= $adminWarnings['pending_expenses'] ?></h3>
+                            <small class="text-muted">Cần xử lý trong tháng hiện tại</small>
+                        </div>
+                    </div>
+                </a>
+            </div>
+        </div>
+        <?php endif; ?>
 
         <!-- Menu chức năng nhanh -->
         <div class="card border-0 shadow-sm">

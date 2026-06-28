@@ -214,6 +214,40 @@ $sidebarUser = currentUser();
         </li>
         <?php endif; ?>
 
+        <?php if (hasRole('director','accountant','manager','warehouse','production','employee')): ?>
+        <li class="nav-section">HÀNH CHÍNH</li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/admin/expenses') ?>"
+               href="/erp/modules/admin/expenses.php">
+                <i class="fas fa-file-invoice-dollar"></i> <span>Chi phí</span>
+            </a>
+        </li>
+        <?php endif; ?>
+        <?php if (hasRole('director','accountant','manager')): ?>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/admin/assets') ?>"
+               href="/erp/modules/admin/assets.php">
+                <i class="fas fa-laptop"></i> <span>Tài sản</span>
+            </a>
+        </li>
+        <?php endif; ?>
+        <?php if (hasRole('director','accountant','manager','warehouse')): ?>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/admin/vehicles') ?>"
+               href="/erp/modules/admin/vehicles.php">
+                <i class="fas fa-car"></i> <span>Phương tiện</span>
+            </a>
+        </li>
+        <?php endif; ?>
+        <?php if (hasRole('director','accountant','manager')): ?>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/admin/budget') ?>"
+               href="/erp/modules/admin/budget.php">
+                <i class="fas fa-chart-pie"></i> <span>Ngân sách HC</span>
+            </a>
+        </li>
+        <?php endif; ?>
+
         <!-- ==================== KPI SẢN XUẤT ==================== -->
         <?php if (hasRole('director', 'accountant', 'manager', 'warehouse', 'production')): ?>
         <li class="nav-section">KPI SẢN XUẤT</li>
