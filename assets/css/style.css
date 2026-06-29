@@ -39,7 +39,6 @@ body { padding-top: 56px; background: #f0f2f5; font-family: 'Segoe UI', sans-ser
     color: #fff !important;
     background: rgba(78,154,241,0.13);
 }
-
 .sidebar .sidebar-arrow {
     font-size: 11px;
     margin-left: auto !important;
@@ -49,17 +48,18 @@ body { padding-top: 56px; background: #f0f2f5; font-family: 'Segoe UI', sans-ser
     pointer-events: none;
 }
 
-/* ======= SUBMENU ======= */
+/* ======= SUBMENU - ẨN MẶC ĐỊNH (dùng !important để override Bootstrap .nav) ======= */
 .sidebar-submenu {
     list-style: none;
     padding: 3px 0 6px 0;
     margin: 0;
-    display: none;       /* mặc định ẩn hoàn toàn */
+    display: none !important;
     background: rgba(0,0,0,0.2);
     border-bottom: 1px solid rgba(255,255,255,0.05);
+    flex-direction: column;
 }
 .sidebar-submenu.open {
-    display: block;
+    display: flex !important;
     animation: sbDown 0.2s ease;
 }
 @keyframes sbDown {
@@ -67,6 +67,9 @@ body { padding-top: 56px; background: #f0f2f5; font-family: 'Segoe UI', sans-ser
     to   { opacity: 1; transform: translateY(0); }
 }
 
+.sidebar-submenu li {
+    list-style: none;
+}
 .sidebar-submenu li a.nav-link {
     font-size: 13px;
     padding: 8px 12px 8px 26px;
