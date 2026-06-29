@@ -12,6 +12,7 @@ $canViewHistory = hasRole('director', 'accountant', 'manager');
 $canRecordPayment = hasRole('director', 'accountant', 'manager');
 $errors = [];
 $oldInputWasFlashed = false;
+$paymentTolerance = 0.001; // tránh lỗi làm tròn số thực khi so sánh số tiền còn lại
 
 $categories = getExpenseCategories($pdo);
 $categoryIds = array_map(static fn(array $row): int => (int)$row['id'], $categories);
@@ -289,7 +290,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $paidAmount = (float)fetchScalarSafe($pdo, 'SELECT COALESCE(SUM(amount), 0) FROM expense_payments WHERE expense_id = ?', [$expenseId], 0);
             $remaining = (float)$expense['amount'] - $paidAmount;
-            if ($amount > $remaining + 0.001) {
+            if ($amount > $remaining + $paymentTolerance) {
                 setFlash('danger', 'Số tiền thanh toán vượt quá số tiền còn lại.');
             } else {
                 $stmt = $pdo->prepare('INSERT INTO expense_payments (expense_id, payment_date, amount, payment_method, paid_by, note) VALUES (?, ?, ?, ?, ?, ?)');

@@ -109,7 +109,7 @@ function fetchOneSafe(PDO $pdo, string $sql, array $params = []): ?array {
     }
 }
 
-function fetchScalarSafe(PDO $pdo, string $sql, array $params = [], $default = null) {
+function fetchScalarSafe(PDO $pdo, string $sql, array $params = [], $default = null): mixed {
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
@@ -133,8 +133,8 @@ function ensurePostCsrf(): void {
 }
 
 // ---- Output escape ----
-function e(string $value): string {
-    return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+function e($value): string {
+    return htmlspecialchars((string) ($value ?? ''), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 }
 
 // ---- Redirect helper ----

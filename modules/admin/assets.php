@@ -8,6 +8,7 @@ requireRole('director', 'accountant', 'manager');
 $pdo = getDBConnection();
 $errors = [];
 $oldInputWasFlashed = false;
+$statsWhere = ['1=1'];
 $categoryMap = [
     'computer' => 'Máy tính',
     'printer' => 'Máy in',
@@ -239,10 +240,12 @@ $where = ['1=1'];
 $params = [];
 if ($filterCategory !== '') {
     $where[] = 'ca.category = ?';
+    $statsWhere[] = 'category = ?';
     $params[] = $filterCategory;
 }
 if ($filterStatus !== '') {
     $where[] = 'ca.status = ?';
+    $statsWhere[] = 'status = ?';
     $params[] = $filterStatus;
 }
 $assets = fetchAllSafe(
@@ -262,7 +265,7 @@ $stats = fetchOneSafe(
             SUM(CASE WHEN status = 'assigned' THEN 1 ELSE 0 END) AS assigned_assets,
             SUM(CASE WHEN status = 'maintenance' THEN 1 ELSE 0 END) AS maintenance_assets
      FROM company_assets
-     WHERE " . implode(' AND ', str_replace('ca.', '', $where)),
+     WHERE " . implode(' AND ', $statsWhere),
     $params
 ) ?: ['total_assets' => 0, 'active_assets' => 0, 'assigned_assets' => 0, 'maintenance_assets' => 0];
 $employees = fetchAllSafe($pdo, 'SELECT id, full_name, username FROM users WHERE is_active = 1 ORDER BY full_name');
