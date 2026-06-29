@@ -35,8 +35,6 @@ $deliveries = $pdo->prepare("
 $deliveries->execute($params);
 $deliveries = $deliveries->fetchAll(PDO::FETCH_ASSOC);
 
-$grandTotal = array_sum(array_column($deliveries, 'total_amount'));
-
 // Lấy danh sách khách hàng kèm phone, address để auto-fill
 $customers = $pdo->query("
     SELECT id, customer_name, customer_code, phone, address
@@ -112,11 +110,6 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                     <button type="submit" class="btn btn-sm btn-primary"><i class="fas fa-filter me-1"></i>Lọc</button>
                     <a href="?" class="btn btn-sm btn-outline-secondary ms-1">Reset</a>
                 </div>
-                <?php if (!empty($deliveries)): ?>
-                <div class="col-auto ms-auto">
-                    <span class="badge bg-success fs-6">Tổng: <?= number_format($grandTotal) ?> đ</span>
-                </div>
-                <?php endif; ?>
             </form>
         </div>
     </div>
@@ -133,7 +126,6 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <th>Khách hàng</th>
                             <th class="text-center">Số dòng SP</th>
                             <th class="text-end">Tổng SL</th>
-                            <th class="text-end">Thành tiền</th>
                             <th>Trạng thái</th>
                             <th>Người tạo</th>
                             <th width="110">Thao tác</th>
@@ -141,7 +133,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                     </thead>
                     <tbody>
                     <?php if (empty($deliveries)): ?>
-                        <tr><td colspan="9" class="text-center text-muted py-4">Chưa có biên bản nào</td></tr>
+                        <tr><td colspan="8" class="text-center text-muted py-4">Chưa có biên bản nào</td></tr>
                     <?php else: ?>
                         <?php foreach ($deliveries as $dv):
                             $isToday    = ($dv['delivery_date'] === $today);
@@ -156,7 +148,6 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <td class="fw-semibold"><?= htmlspecialchars($dv['customer_name'] ?? '—') ?></td>
                             <td class="text-center"><?= $dv['item_count'] ?></td>
                             <td class="text-end"><?= number_format($dv['total_qty'] ?? 0) ?></td>
-                            <td class="text-end fw-bold text-success"><?= number_format($dv['total_amount']) ?> đ</td>
                             <td><span class="badge bg-<?= $s[0] ?>"><?= $s[1] ?></span></td>
                             <td class="small text-muted"><?= htmlspecialchars($dv['created_by_name'] ?? '—') ?></td>
                             <td>
@@ -199,15 +190,6 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                         <?php endforeach; ?>
                     <?php endif; ?>
                     </tbody>
-                    <?php if (!empty($deliveries)): ?>
-                    <tfoot class="table-light">
-                        <tr>
-                            <td colspan="5" class="text-end fw-bold">Tổng cộng:</td>
-                            <td class="text-end fw-bold text-success fs-6"><?= number_format($grandTotal) ?> đ</td>
-                            <td colspan="3"></td>
-                        </tr>
-                    </tfoot>
-                    <?php endif; ?>
                 </table>
             </div>
         </div>
@@ -311,33 +293,21 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                     </div>
 
                     <!-- ── Chi tiết SP ── -->
-                    <div class="d-flex justify-content-between align-items-center mb-2">
-                        <span class="fw-bold">Chi tiết sản phẩm <small class="text-muted fw-normal">(chọn từ output SX)</small></span>
-                        <button type="button" class="btn btn-sm btn-success" id="btnAddRow">
-                            <i class="fas fa-plus me-1"></i>Thêm dòng
-                        </button>
+                    <div id="stockLoadMsg" class="text-muted small mb-2">
+                        <i class="fas fa-info-circle me-1"></i>Chọn khách hàng để xem danh sách sản phẩm tồn kho.
                     </div>
                     <div class="table-responsive">
                         <table class="table table-bordered align-middle mb-0">
                             <thead class="table-light">
                                 <tr>
-                                    <th width="270">Output SX <span class="text-danger">*</span></th>
+                                    <th width="130">Mã SP</th>
                                     <th>Mô tả</th>
                                     <th width="70">ĐVT</th>
-                                    <th width="110">Số lượng</th>
-                                    <th width="130">Đơn giá</th>
-                                    <th width="140">Thành tiền</th>
+                                    <th width="120">Số lượng</th>
                                     <th width="40"></th>
                                 </tr>
                             </thead>
                             <tbody id="itemBody"></tbody>
-                            <tfoot>
-                                <tr class="table-light">
-                                    <td colspan="5" class="text-end fw-bold">Tổng cộng:</td>
-                                    <td class="fw-bold text-success" id="grandTotalDisplay">0 đ</td>
-                                    <td></td>
-                                </tr>
-                            </tfoot>
                         </table>
                     </div>
                 </form>
@@ -497,6 +467,31 @@ document.getElementById('selCustomer').addEventListener('change', function() {
     document.getElementById('inpReceiverName').value    = opt.dataset.name  || '';
     document.getElementById('inpReceiverPhone').value   = opt.dataset.phone || '';
     document.getElementById('inpDeliveryAddress').value = opt.dataset.address || '';
+    const custId = this.value;
+    const body = document.getElementById('itemBody');
+    const msg  = document.getElementById('stockLoadMsg');
+    body.innerHTML = '';
+    rowIdx = 0;
+    if (!custId) {
+        msg.innerHTML = '<i class="fas fa-info-circle me-1"></i>Chọn khách hàng để xem danh sách sản phẩm tồn kho.';
+        return;
+    }
+    msg.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Đang tải...';
+    fetch(`/erp/api/production/get_customer_stock.php?customer_id=${custId}`)
+    .then(r => r.json())
+    .then(res => {
+        if (!res.ok || !res.items || !res.items.length) {
+            msg.innerHTML = '<span class="text-warning"><i class="fas fa-exclamation-circle me-1"></i>Không còn sản phẩm nào cần giao cho khách hàng này.</span>';
+            return;
+        }
+        msg.innerHTML = `<span class="text-success"><i class="fas fa-check-circle me-1"></i>Tìm thấy ${res.items.length} sản phẩm tồn kho.</span>`;
+        res.items.forEach(item => {
+            body.insertAdjacentHTML('beforeend', makeStockRow(item, rowIdx++));
+        });
+    })
+    .catch(() => {
+        msg.innerHTML = '<span class="text-danger"><i class="fas fa-times-circle me-1"></i>Lỗi khi tải dữ liệu.</span>';
+    });
 });
 
 // ── Auto-fill khi chọn khách hàng (modal SỬA) ────────────────────────
@@ -539,6 +534,31 @@ function makeRow(idx) {
         </td>
         <td><input type="number" name="items[${idx}][unit_price]" class="form-control form-control-sm inp-price" placeholder="0" min="0" value="0"></td>
         <td><input type="number" name="items[${idx}][total_price]" class="form-control form-control-sm inp-total fw-bold text-success" readonly value="0"></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row"><i class="fas fa-times"></i></button></td>
+    </tr>`;
+}
+
+// ── Escape HTML để tránh XSS khi điền data từ API vào template ────────
+function htmlEsc(s) {
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Tạo dòng SP từ kho thành phẩm (modal TẠO) ────────────────────────
+function makeStockRow(item, idx) {
+    const qty = parseFloat(item.qty_available) || 0;
+    return `
+    <tr data-idx="${idx}">
+        <td>
+            <input type="hidden" name="items[${idx}][product_code_id]" value="${item.product_code_id}">
+            <span class="fw-semibold">${htmlEsc(item.product_code)}</span>
+        </td>
+        <td><input type="text" name="items[${idx}][description]" class="form-control form-control-sm" value="${htmlEsc(item.description)}" readonly></td>
+        <td><input type="text" name="items[${idx}][unit]" class="form-control form-control-sm" value="${htmlEsc(item.unit)}" readonly></td>
+        <td>
+            <input type="number" name="items[${idx}][quantity]" class="form-control form-control-sm inp-qty"
+                   min="0.01" step="any" max="${qty}" value="${qty}" required>
+            <div class="form-text text-info small">Tối đa: ${qty.toLocaleString('vi-VN')}</div>
+        </td>
         <td><button type="button" class="btn btn-sm btn-outline-danger btn-remove-row"><i class="fas fa-times"></i></button></td>
     </tr>`;
 }
@@ -590,24 +610,25 @@ function bindBodyEvents(bodyId, displayId) {
 }
 
 let rowIdx = 0, editRowIdx = 0;
-bindBodyEvents('itemBody',     'grandTotalDisplay');
 bindBodyEvents('editItemBody', 'editGrandTotalDisplay');
+
+// Xử lý xoá dòng trong modal TẠO
+document.getElementById('itemBody').addEventListener('click', e => {
+    if (e.target.closest('.btn-remove-row')) {
+        e.target.closest('tr').remove();
+    }
+});
 
 document.getElementById('modalDelivery').addEventListener('show.bs.modal', () => {
     document.getElementById('itemBody').innerHTML = '';
     rowIdx = 0;
-    document.getElementById('itemBody').insertAdjacentHTML('beforeend', makeRow(rowIdx++));
-    updateTotal('grandTotalDisplay', 'itemBody');
+    document.getElementById('stockLoadMsg').innerHTML = '<i class="fas fa-info-circle me-1"></i>Chọn khách hàng để xem danh sách sản phẩm tồn kho.';
     // Reset sender name về user hiện tại
     document.getElementById('inpSenderName').value = '<?= addslashes($user['full_name'] ?? '') ?>';
     document.getElementById('selCustomer').value = '';
     document.getElementById('inpReceiverName').value  = '';
     document.getElementById('inpReceiverPhone').value = '';
     document.getElementById('inpDeliveryAddress').value = '';
-});
-
-document.getElementById('btnAddRow').addEventListener('click', () => {
-    document.getElementById('itemBody').insertAdjacentHTML('beforeend', makeRow(rowIdx++));
 });
 document.getElementById('btnAddEditRow').addEventListener('click', () => {
     document.getElementById('editItemBody').insertAdjacentHTML('beforeend', makeRow(editRowIdx++));
@@ -617,11 +638,14 @@ document.getElementById('btnAddEditRow').addEventListener('click', () => {
 function saveDelivery(status) {
     const form = document.getElementById('formDelivery');
     if (!form.checkValidity()) { form.reportValidity(); return; }
+    const rows = document.querySelectorAll('#itemBody tr');
+    if (!rows.length) { alert('Chưa có sản phẩm nào để giao!'); return; }
     let valid = false;
-    document.querySelectorAll('#itemBody tr').forEach(r => {
-        if (r.querySelector('.sel-output').value && parseFloat(r.querySelector('.inp-qty').value)>0) valid = true;
+    rows.forEach(r => {
+        const qtyEl = r.querySelector('.inp-qty');
+        if (qtyEl && parseFloat(qtyEl.value) > 0) valid = true;
     });
-    if (!valid) { alert('Vui lòng chọn output SX và nhập số lượng!'); return; }
+    if (!valid) { alert('Vui lòng nhập số lượng giao!'); return; }
     const btn = status==='confirmed' ? document.getElementById('btnSaveConfirm') : document.getElementById('btnSaveDraft');
     btn.disabled = true;
     btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Đang lưu...';
