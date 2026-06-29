@@ -176,17 +176,6 @@ function getClientIp(): string {
         return $remoteAddr;
     }
 
-    foreach (['HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR'] as $key) {
-        if (empty($_SERVER[$key])) {
-            continue;
-        }
-
-        $candidate = trim(explode(',', (string)$_SERVER[$key])[0]);
-        if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_IP)) {
-            return $candidate;
-        }
-    }
-
     return 'unknown';
 }
 

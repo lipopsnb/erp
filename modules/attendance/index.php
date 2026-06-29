@@ -14,6 +14,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCSRF($_POST['csrf_token'] ?? 
     $now = date('Y-m-d H:i:s');
     $lat = isset($_POST['lat']) && $_POST['lat'] !== '' && is_numeric($_POST['lat']) ? (float)$_POST['lat'] : null;
     $lng = isset($_POST['lng']) && $_POST['lng'] !== '' && is_numeric($_POST['lng']) ? (float)$_POST['lng'] : null;
+    if ($lat !== null && ($lat < -90 || $lat > 90)) {
+        $lat = null;
+    }
+    if ($lng !== null && ($lng < -180 || $lng > 180)) {
+        $lng = null;
+    }
     $locationMeta = resolveAttendanceLocation($pdo, $lat, $lng);
     $ip = $locationMeta['ip'];
     $locationFlag = $locationMeta['flag'];

@@ -670,7 +670,7 @@ function formatLocationFlag(flag) {
     return map[flag] || map.unknown;
 }
 
-function hasLocation(lat, lng) {
+function hasValidLocation(lat, lng) {
     return Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
 }
 
@@ -739,10 +739,10 @@ async function showDayDetail(userId, dateStr, empName) {
                             </span></td></tr>
                         <tr><th>Vị trí vào</th><td>${formatLocationFlag(data.att?.check_in_location_flag)}</td></tr>
                         <tr><th>IP vào</th><td><code class="small">${data.att?.check_in_ip ? escapeHtml(data.att.check_in_ip) : '—'}</code></td></tr>
-                        ${hasLocation(data.att?.check_in_lat, data.att?.check_in_lng) ? `<tr><th>Tọa độ vào</th><td>${buildLocationLink(data.att.check_in_lat, data.att.check_in_lng)}</td></tr>` : ''}
+                        ${hasValidLocation(data.att?.check_in_lat, data.att?.check_in_lng) ? `<tr><th>Tọa độ vào</th><td>${buildLocationLink(data.att.check_in_lat, data.att.check_in_lng)}</td></tr>` : ''}
                         <tr><th>Vị trí ra</th><td>${formatLocationFlag(data.att?.check_out_location_flag)}</td></tr>
                         <tr><th>IP ra</th><td><code class="small">${data.att?.check_out_ip ? escapeHtml(data.att.check_out_ip) : '—'}</code></td></tr>
-                        ${hasLocation(data.att?.check_out_lat, data.att?.check_out_lng) ? `<tr><th>Tọa độ ra</th><td>${buildLocationLink(data.att.check_out_lat, data.att.check_out_lng)}</td></tr>` : ''}
+                        ${hasValidLocation(data.att?.check_out_lat, data.att?.check_out_lng) ? `<tr><th>Tọa độ ra</th><td>${buildLocationLink(data.att.check_out_lat, data.att.check_out_lng)}</td></tr>` : ''}
                     </table>
                 </div>
             </div>
