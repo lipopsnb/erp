@@ -39,10 +39,6 @@ $customers = $pdo->query("
     SELECT id, customer_code, customer_name FROM customers WHERE is_active = 1 ORDER BY customer_name
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-$productList = $pdo->query("
-    SELECT id, product_code, description, unit FROM product_codes WHERE is_active = 1 ORDER BY product_code
-")->fetchAll(PDO::FETCH_ASSOC);
-
 $csrf = generateCSRF();
 include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/header.php';
 include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
@@ -272,17 +268,21 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 </div>
 
 <script>
-const csrf   = '<?= $csrf ?>';
-const productList = <?= json_encode($productList, JSON_UNESCAPED_UNICODE) ?>;
+const csrf = '<?= $csrf ?>';
 let rowIndex = 0;
+window._customerProducts = [];
 
 function escHtml(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function buildProductOptions(selected = 0) {
+function buildProductOptionsFromCache(selected = 0) {
+    const products = window._customerProducts || [];
+    if (products.length === 0) {
+        return '<option value="">-- Chọn khách hàng trước --</option>';
+    }
     let opts = '<option value="">-- Chọn mã SP --</option>';
-    productList.forEach(p => {
+    products.forEach(p => {
         opts += `<option value="${p.id}" data-unit="${escHtml(p.unit)}" ${p.id == selected ? 'selected' : ''}>
                     [${escHtml(p.product_code)}] ${escHtml(p.description)} (${escHtml(p.unit)})
                  </option>`;
@@ -290,16 +290,52 @@ function buildProductOptions(selected = 0) {
     return opts;
 }
 
+// Khi chọn khách hàng: fetch SP của KH đó và rebuild tất cả dropdown
+document.getElementById('wiCustomer').addEventListener('change', function() {
+    const custId = this.value;
+    if (!custId) {
+        window._customerProducts = [];
+        document.querySelectorAll('#wiItems select[name*="[product_code_id]"]').forEach(sel => {
+            sel.innerHTML = '<option value="">-- Chọn khách hàng trước --</option>';
+            sel.disabled = true;
+        });
+        return;
+    }
+    fetch(`/erp/api/production/get_customer_products.php?customer_id=${custId}`)
+        .then(r => r.json())
+        .then(res => {
+            if (res.ok) {
+                window._customerProducts = res.products;
+                document.querySelectorAll('#wiItems select[name*="[product_code_id]"]').forEach(sel => {
+                    const currentVal = sel.value;
+                    sel.innerHTML = buildProductOptionsFromCache(0);
+                    sel.value = currentVal;
+                    sel.disabled = false;
+                });
+            } else {
+                window._customerProducts = [];
+                document.querySelectorAll('#wiItems select[name*="[product_code_id]"]').forEach(sel => {
+                    sel.innerHTML = '<option value="">Không có SP nào</option>';
+                    sel.disabled = true;
+                });
+            }
+        })
+        .catch(() => {
+            alert('Không thể tải danh sách sản phẩm. Vui lòng thử lại.');
+        });
+});
+
 function addRow(item = {}) {
     rowIndex++;
     const n = rowIndex;
+    const hasCust = window._customerProducts.length > 0;
     const tr = document.createElement('tr');
     tr.innerHTML = `
         <td class="text-muted small row-num">${document.querySelectorAll('#wiItems tr').length + 1}</td>
         <td>
             <input type="hidden" name="items[${n}][id]" value="${item.id || 0}">
-            <select name="items[${n}][product_code_id]" class="form-select form-select-sm" required>
-                ${buildProductOptions(item.product_code_id || 0)}
+            <select name="items[${n}][product_code_id]" class="form-select form-select-sm" required ${hasCust ? '' : 'disabled'}>
+                ${buildProductOptionsFromCache(item.product_code_id || 0)}
             </select>
         </td>
         <td>
@@ -335,6 +371,7 @@ document.querySelector('[data-bs-target="#modalWI"]').addEventListener('click', 
     document.getElementById('wiDate').value = '<?= date('Y-m-d') ?>';
     document.getElementById('wiItems').innerHTML = '';
     rowIndex = 0;
+    window._customerProducts = [];
     addRow();
 });
 
@@ -363,14 +400,24 @@ document.querySelectorAll('.btn-edit-wi').forEach(btn => {
                 if (!d.ok) { alert(d.msg); return; }
                 const h = d.header;
                 document.getElementById('modalWITitle').innerHTML = '<i class="fas fa-edit me-2"></i>Sửa phiếu nhập kho';
-                document.getElementById('wiId').value        = h.id;
-                document.getElementById('wiDate').value      = h.receipt_date;
-                document.getElementById('wiCustomer').value  = h.customer_id;
-                document.getElementById('wiNote').value      = h.note || '';
+                document.getElementById('wiId').value       = h.id;
+                document.getElementById('wiDate').value     = h.receipt_date;
+                document.getElementById('wiCustomer').value = h.customer_id;
+                document.getElementById('wiNote').value     = h.note || '';
                 document.getElementById('wiItems').innerHTML = '';
                 rowIndex = 0;
-                d.items.forEach(it => addRow(it));
-                new bootstrap.Modal(document.getElementById('modalWI')).show();
+                window._customerProducts = [];
+                // Fetch SP của KH này trước, rồi mới render các dòng
+                fetch(`/erp/api/production/get_customer_products.php?customer_id=${h.customer_id}`)
+                    .then(r => r.json())
+                    .then(res => {
+                        window._customerProducts = res.ok ? res.products : [];
+                        d.items.forEach(it => addRow(it));
+                        new bootstrap.Modal(document.getElementById('modalWI')).show();
+                    })
+                    .catch(() => {
+                        alert('Không thể tải danh sách sản phẩm. Vui lòng thử lại.');
+                    });
             });
     });
 });
