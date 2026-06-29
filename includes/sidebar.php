@@ -13,11 +13,11 @@ function isGroupActive(array $paths): bool {
 }
 $sidebarUser = currentUser();
 
-// Xác định group active để JS biết mở nhóm nào khi load trang
 $activeGroup = '';
 if (isGroupActive(['/modules/users/profile', '/modules/users/change_password'])) $activeGroup = 'personal';
 elseif (isGroupActive(['/attendance/', '/leave_request', '/ot_request', '/all_attendance',
-                        '/leave_manage', '/ot_manage', '/shift_schedule', '/shift_assign', '/shift_setup'])) $activeGroup = 'attendance';
+                        '/leave_manage', '/ot_manage', '/shift_schedule', '/shift_assign', '/shift_setup',
+                        '/payroll/holidays'])) $activeGroup = 'attendance';
 elseif (isGroupActive(['/payroll/'])) $activeGroup = 'payroll';
 elseif (isGroupActive(['/master/'])) $activeGroup = 'master';
 elseif (isGroupActive(['/warehouse/', '/production/'])) $activeGroup = 'warehouse';
@@ -87,6 +87,8 @@ elseif (isGroupActive(['/modules/users/index'])) $activeGroup = 'system';
         <?php if (hasRole('director','accountant','manager')): ?>
         <li><a class="nav-link <?= isActive('/shift_setup') ?>" href="/erp/modules/attendance/shift_setup.php">
           <i class="fas fa-sliders-h"></i><span>Setup ca làm việc</span></a></li>
+        <li><a class="nav-link <?= isActive('/payroll/holidays') ?>" href="/erp/modules/payroll/holidays.php">
+          <i class="fas fa-calendar-times"></i><span>Ngày lễ</span></a></li>
         <?php endif; ?>
       </ul>
     </li>
@@ -101,8 +103,6 @@ elseif (isGroupActive(['/modules/users/index'])) $activeGroup = 'system';
         <?php if (hasRole('director','accountant','manager')): ?>
         <li><a class="nav-link <?= isActive('/payroll/index') ?>" href="/erp/modules/payroll/index.php">
           <i class="fas fa-money-check-alt"></i><span>Quản lý kỳ lương</span></a></li>
-        <li><a class="nav-link <?= isActive('/payroll/holidays') ?>" href="/erp/modules/payroll/holidays.php">
-          <i class="fas fa-calendar-times"></i><span>Ngày lễ</span></a></li>
         <?php endif; ?>
         <?php if (!hasRole('director','accountant','manager')): ?>
         <li><a class="nav-link <?= isActive('/payroll/my_payroll') ?>" href="/erp/modules/payroll/my_payroll.php">
@@ -249,19 +249,15 @@ elseif (isGroupActive(['/modules/users/index'])) $activeGroup = 'system';
 
 <script>
 (function(){
-  // Nhóm active từ PHP (trang hiện tại thuộc nhóm nào)
   var activeGroup = <?= json_encode($activeGroup) ?>;
-
   var allToggles = document.querySelectorAll('.sidebar-group-toggle');
 
-  // Mở nhóm target, đóng tất cả nhóm còn lại
   function openGroup(targetId) {
     allToggles.forEach(function(t) {
       var id  = t.getAttribute('data-target');
       var sub = document.getElementById(id);
       var arr = t.querySelector('.sidebar-arrow');
       if (!sub) return;
-
       if (id === targetId) {
         sub.classList.add('open');
         t.classList.add('grp-active');
@@ -274,29 +270,21 @@ elseif (isGroupActive(['/modules/users/index'])) $activeGroup = 'system';
     });
   }
 
-  // Khi load trang: mở nhóm của trang hiện tại (nếu có)
-  if (activeGroup) {
-    openGroup('grp-' + activeGroup);
-  }
+  if (activeGroup) openGroup('grp-' + activeGroup);
 
-  // Xử lý click
   allToggles.forEach(function(toggle) {
     toggle.addEventListener('click', function(e) {
       e.preventDefault();
       var targetId = toggle.getAttribute('data-target');
       var sub = document.getElementById(targetId);
       if (!sub) return;
-
       var isOpen = sub.classList.contains('open');
-
       if (isOpen) {
-        // Click lại nhóm đang mở → đóng lại
         sub.classList.remove('open');
         toggle.classList.remove('grp-active');
         var arr = toggle.querySelector('.sidebar-arrow');
         if (arr) { arr.style.transform = ''; arr.style.opacity = '0.45'; }
       } else {
-        // Mở nhóm mới, đóng tất cả còn lại
         openGroup(targetId);
       }
     });
