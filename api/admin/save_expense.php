@@ -21,7 +21,7 @@ $action = trim($_POST['action'] ?? '');
 $id = (int)($_POST['id'] ?? 0);
 $canViewAll = hasRole('director', 'accountant', 'manager');
 $canApprove = hasRole('director', 'accountant');
-$canReject = hasRole('director');
+$canReject = hasRole('director', 'accountant');
 
 $findExpense = static function (PDO $pdo, int $expenseId) {
     $stmt = $pdo->prepare('SELECT * FROM expense_requests WHERE id = ?');
@@ -139,6 +139,11 @@ if (!$categoryId || !$expenseDate || $amount <= 0 || $purpose === '') {
     echo json_encode(['ok' => false, 'msg' => 'Thiếu dữ liệu bắt buộc']);
     exit;
 }
+$parsedDate = DateTime::createFromFormat('Y-m-d', $expenseDate);
+if (!$parsedDate || $parsedDate->format('Y-m-d') !== $expenseDate) {
+    echo json_encode(['ok' => false, 'msg' => 'Ngày chi phí không hợp lệ']);
+    exit;
+}
 if (!in_array($paymentMethod, ['cash', 'bank_transfer'], true)) {
     echo json_encode(['ok' => false, 'msg' => 'Hình thức thanh toán không hợp lệ']);
     exit;
@@ -185,7 +190,7 @@ try {
                 $id,
             ]);
     } else {
-        $nextSeq = (int)$pdo->query('SELECT COALESCE(MAX(id), 0) + 1 FROM expense_requests')->fetchColumn();
+        $nextSeq = (int)$pdo->query('SELECT COALESCE(MAX(CAST(SUBSTRING_INDEX(request_no, \'-\', -1) AS UNSIGNED)), 0) + 1 FROM expense_requests FOR UPDATE')->fetchColumn();
         $requestNo = 'EXP-' . date('Ymd', strtotime($expenseDate)) . '-' . str_pad((string)$nextSeq, 3, '0', STR_PAD_LEFT);
 
         $pdo->prepare("INSERT INTO expense_requests

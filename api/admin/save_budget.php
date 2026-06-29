@@ -24,6 +24,10 @@ if ($action !== 'save') {
 $year = (int)($_POST['budget_year'] ?? date('Y'));
 $month = (int)($_POST['budget_month'] ?? date('n'));
 $budgets = $_POST['budgets'] ?? [];
+if (!is_array($budgets)) {
+    echo json_encode(['ok' => false, 'msg' => 'Dữ liệu không hợp lệ.']);
+    exit;
+}
 $user = currentUser();
 $pdo = getDBConnection();
 
@@ -40,7 +44,6 @@ try {
         ON DUPLICATE KEY UPDATE
             budget_amount = VALUES(budget_amount),
             note = VALUES(note),
-            created_by = VALUES(created_by),
             updated_at = CURRENT_TIMESTAMP");
 
     foreach ($budgets as $categoryId => $row) {

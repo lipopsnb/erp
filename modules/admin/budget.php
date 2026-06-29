@@ -27,9 +27,11 @@ foreach ($budgetRows as $row) {
 
 $actualStmt = $pdo->prepare("SELECT category_id, COALESCE(SUM(amount), 0) AS actual_amount
     FROM expense_requests
-    WHERE status = 'approved' AND YEAR(expense_date) = ? AND MONTH(expense_date) = ?
+    WHERE status = 'approved' AND expense_date BETWEEN ? AND ?
     GROUP BY category_id");
-$actualStmt->execute([$selectedYear, $selectedMonth]);
+$startDate = sprintf('%04d-%02d-01', $selectedYear, $selectedMonth);
+$endDate = date('Y-m-t', strtotime($startDate));
+$actualStmt->execute([$startDate, $endDate]);
 $actualByCategory = [];
 foreach ($actualStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
     $actualByCategory[$row['category_id']] = (float)$row['actual_amount'];

@@ -36,6 +36,13 @@ try {
             if (!$id) {
                 throw new RuntimeException('Thiếu ID');
             }
+            $hasData = $pdo->prepare('SELECT (SELECT COUNT(*) FROM vehicle_fuel WHERE vehicle_id=?) + (SELECT COUNT(*) FROM vehicle_trips WHERE vehicle_id=?) AS total');
+            $hasData->execute([$id, $id]);
+            $count = (int)$hasData->fetchColumn();
+            if ($count > 0) {
+                echo json_encode(['ok' => false, 'msg' => "Xe có $count bản ghi liên quan (nhiên liệu/chuyến đi). Không thể xoá."]);
+                exit;
+            }
             $pdo->prepare('DELETE FROM vehicles WHERE id = ?')->execute([$id]);
             echo json_encode(['ok' => true, 'msg' => 'Đã xoá xe']);
             exit;
@@ -104,8 +111,8 @@ try {
         $odometer = trim($_POST['odometer'] ?? '') !== '' ? (int)$_POST['odometer'] : null;
         $note = trim($_POST['note'] ?? '') ?: null;
 
-        if ($fuelDate === '' || $amount < 0) {
-            throw new RuntimeException('Dữ liệu đổ dầu không hợp lệ');
+        if ($fuelDate === '' || $amount <= 0) {
+            throw new RuntimeException('Số lượng nhiên liệu phải lớn hơn 0.');
         }
         if ($action === 'edit' && !$id) {
             throw new RuntimeException('Thiếu ID lịch sử đổ dầu');
@@ -166,6 +173,9 @@ try {
 
         if ($tripDate === '') {
             throw new RuntimeException('Ngày sử dụng xe không hợp lệ');
+        }
+        if ($kmStart !== null && $kmEnd !== null && $kmEnd < $kmStart) {
+            throw new RuntimeException('Số km kết thúc phải lớn hơn hoặc bằng km bắt đầu.');
         }
         if ($action === 'edit' && !$id) {
             throw new RuntimeException('Thiếu ID lịch sử sử dụng xe');
