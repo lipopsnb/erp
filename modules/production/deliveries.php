@@ -316,7 +316,12 @@ document.getElementById('dlCustomer').addEventListener('change', function () {
     fetch(`/erp/api/production/get_customer_stock.php?customer_id=${custId}`)
         .then(r => r.json())
         .then(res => {
-            if (!res.ok || !res.items || !res.items.length) {
+            if (!res.ok) {
+                msg.innerHTML = '<i class="fas fa-times-circle me-1"></i>Lỗi từ máy chủ: ' + escHtml(res.msg || 'Không xác định');
+                msg.className = 'text-danger small';
+                return;
+            }
+            if (!res.items || !res.items.length) {
                 msg.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>Không còn sản phẩm nào cần giao cho khách hàng này.';
                 msg.className = 'text-warning small';
                 return;
@@ -334,9 +339,14 @@ document.getElementById('dlCustomer').addEventListener('change', function () {
 document.getElementById('btnSaveDL').addEventListener('click', () => {
     const form = document.getElementById('formDL');
     if (!form.checkValidity()) { form.reportValidity(); return; }
-    if (!document.querySelectorAll('#dlItems tr').length) {
-        alert('Chưa có sản phẩm nào để giao!'); return;
-    }
+    const rows = document.querySelectorAll('#dlItems tr');
+    if (!rows.length) { alert('Chưa có sản phẩm nào để giao!'); return; }
+    let hasQty = false;
+    rows.forEach(r => {
+        const qtyEl = r.querySelector('input[type="number"]');
+        if (qtyEl && parseFloat(qtyEl.value) > 0) hasQty = true;
+    });
+    if (!hasQty) { alert('Vui lòng nhập số lượng giao cho ít nhất một sản phẩm!'); return; }
     const fd = new FormData(form);
     fetch('/erp/api/production/save_deliveries.php', { method: 'POST', body: fd })
         .then(r => r.json())
