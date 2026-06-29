@@ -258,8 +258,6 @@ $sidebarUser = currentUser();
                 <i class="fas fa-chart-bar"></i> <span>Báo cáo kho</span>
             </a>
         </li>
-        <?php endif; ?>
-        <?php if (hasRole('director','accountant','manager','warehouse')): ?>
         <li class="nav-item">
             <a class="nav-link <?= isActive('/admin/vehicles') ?>"
                href="/erp/modules/admin/vehicles.php">
