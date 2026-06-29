@@ -232,6 +232,32 @@ $sidebarUser = currentUser();
         </li>
         <?php endif; ?>
         <?php if (hasRole('director','accountant','manager','warehouse')): ?>
+        <li class="nav-section">KHO VẬT TƯ</li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/admin/inv_items') ?>" href="/erp/modules/admin/inv_items.php">
+                <i class="fas fa-list-alt"></i> <span>Danh mục hàng hoá</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/admin/inv_import') ?>" href="/erp/modules/admin/inv_import.php">
+                <i class="fas fa-arrow-down"></i> <span>Nhập kho</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/admin/inv_export') ?>" href="/erp/modules/admin/inv_export.php">
+                <i class="fas fa-arrow-up"></i> <span>Xuất kho</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/admin/inv_stock') ?>" href="/erp/modules/admin/inv_stock.php">
+                <i class="fas fa-warehouse"></i> <span>Tồn kho</span>
+            </a>
+        </li>
+        <li class="nav-item">
+            <a class="nav-link <?= isActive('/admin/inv_report') ?>" href="/erp/modules/admin/inv_report.php">
+                <i class="fas fa-chart-bar"></i> <span>Báo cáo kho</span>
+            </a>
+        </li>
         <li class="nav-item">
             <a class="nav-link <?= isActive('/admin/vehicles') ?>"
                href="/erp/modules/admin/vehicles.php">
