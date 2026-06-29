@@ -143,7 +143,7 @@ if (!in_array($status, ['active', 'assigned', 'maintenance', 'disposed'], true))
     exit;
 }
 if ($status === 'assigned') {
-    echo json_encode(['ok' => false, 'msg' => 'Status assigned chỉ được set tự động khi cấp phát tài sản']);
+    echo json_encode(['ok' => false, 'msg' => 'Trạng thái "Đã cấp phát" chỉ được set tự động khi cấp phát tài sản']);
     exit;
 }
 
