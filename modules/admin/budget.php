@@ -197,9 +197,7 @@ document.getElementById('btnSaveBudget').addEventListener('click', async () => {
     }
     const form = document.getElementById('formBudget');
     const fd = new FormData(form);
-    if (!fd.has('csrf_token')) {
-        fd.append('csrf_token', csrfBudget);
-    }
+    fd.set('csrf_token', csrfBudget);
     fd.append('action', 'save');
     const response = await fetch('/erp/api/admin/save_budget.php', { method: 'POST', body: fd });
     const data = await response.json();
