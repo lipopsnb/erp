@@ -86,4 +86,87 @@ function getExpenseCategories($pdo) {
         return [];
     }
 }
+
+// ---- Safe DB helpers ----
+function fetchAllSafe(PDO $pdo, string $sql, array $params = []): array {
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        return [];
+    }
+}
+
+function fetchOneSafe(PDO $pdo, string $sql, array $params = []): ?array {
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    } catch (Throwable $e) {
+        return null;
+    }
+}
+
+function fetchScalarSafe(PDO $pdo, string $sql, array $params = [], $default = null) {
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $val = $stmt->fetchColumn();
+        return $val !== false ? $val : $default;
+    } catch (Throwable $e) {
+        return $default;
+    }
+}
+
+// ---- CSRF helpers (form-based) ----
+function csrfInput(): string {
+    return '<input type="hidden" name="csrf_token" value="' . htmlspecialchars(generateCSRF()) . '">';
+}
+
+function ensurePostCsrf(): void {
+    if (!verifyCSRF($_POST['csrf_token'] ?? '')) {
+        http_response_code(403);
+        die('CSRF token không hợp lệ. Vui lòng tải lại trang.');
+    }
+}
+
+// ---- Output escape ----
+function e(string $value): string {
+    return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+// ---- Redirect helper ----
+function redirect(string $path): never {
+    if (str_starts_with($path, 'http') || str_starts_with($path, '/')) {
+        header('Location: ' . $path);
+    } else {
+        header('Location: /erp/' . $path);
+    }
+    exit();
+}
+
+// ---- Old input (sau redirect với errors) ----
+function old(string $key, string $default = ''): string {
+    return (string) ($_SESSION['_old_input'][$key] ?? $default);
+}
+
+function flashOldInput(array $data): void {
+    $_SESSION['_old_input'] = $data;
+}
+
+function clearOldInput(): void {
+    unset($_SESSION['_old_input']);
+}
+
+// ---- Format currency ----
+function formatCurrency($amount): string {
+    return number_format((float)$amount, 0, ',', '.') . ' ₫';
+}
+
+// ---- Current user ID helper ----
+function currentUserId(): int {
+    return (int) ($_SESSION['user_id'] ?? 0);
+}
 ?>
