@@ -344,3 +344,4 @@ if ($oldInputWasFlashed || isset($_SESSION['_old_input'])) {
     clearOldInput();
 }
 include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/footer.php';
+?>

@@ -24,3 +24,4 @@ echo json_encode([
     'stock' => $stock,
     'unit' => $item['unit'] ?? '',
 ]);
+?>

@@ -174,4 +174,4 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
         </div>
     </div>
 </div>
-<?php include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/footer.php';
+<?php include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/footer.php'; ?>
