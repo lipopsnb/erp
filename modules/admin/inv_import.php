@@ -9,6 +9,7 @@ requireRole('director', 'accountant', 'manager', 'warehouse');
 $pdo = getDBConnection();
 $errors = [];
 $oldInputWasFlashed = false;
+$stockTolerance = 0.0001;
 $paymentStatusMap = [
     'paid' => 'Đã thanh toán',
     'unpaid' => 'Chưa thanh toán',
@@ -171,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 [(int)$import['item_id'], (int)$import['item_id']],
                 0
             );
-            if (($currentStock - (float)$import['quantity']) < -0.0001) {
+            if (($currentStock - (float)$import['quantity']) < -$stockTolerance) {
                 setFlash('danger', 'Không thể xoá phiếu nhập vì sẽ làm tồn kho âm.');
             } else {
                 $pdo->prepare('DELETE FROM inv_imports WHERE id = ?')->execute([$id]);

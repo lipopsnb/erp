@@ -9,6 +9,7 @@ requireRole('director', 'accountant', 'manager', 'warehouse');
 $pdo = getDBConnection();
 $errors = [];
 $oldInputWasFlashed = false;
+$stockTolerance = 0.0001;
 $filterMonth = preg_match('/^\d{4}-\d{2}$/', $_GET['month'] ?? '') ? (string)$_GET['month'] : date('Y-m');
 $filterItemId = (int)($_GET['item_id'] ?? 0);
 
@@ -82,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             [$itemId, $itemId],
             0
         );
-        if ($quantity > $currentStock + 0.0001) {
+        if ($quantity > $currentStock + $stockTolerance) {
             $errors[] = 'Số lượng xuất vượt quá tồn kho hiện tại.';
         }
     }

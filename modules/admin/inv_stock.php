@@ -7,6 +7,7 @@ requireLogin();
 requireRole('director', 'accountant', 'manager', 'warehouse');
 
 $pdo = getDBConnection();
+$stockTolerance = 0.0001;
 $categoryMap = [
     'consumable' => 'Vật tư tiêu hao',
     'stationery' => 'Văn phòng phẩm',
@@ -51,7 +52,7 @@ $outOfStockCount = 0;
 foreach ($rows as $row) {
     $stock = (float)$row['current_stock'];
     $minStock = (float)$row['min_stock'];
-    if ($stock <= 0) {
+    if ($stock <= $stockTolerance) {
         $outOfStockCount++;
     } elseif ($stock < $minStock) {
         $lowStockCount++;
@@ -144,7 +145,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <?php
                             $stock = (float)$row['current_stock'];
                             $minStock = (float)$row['min_stock'];
-                            if ($stock <= 0) {
+                            if ($stock <= $stockTolerance) {
                                 $badgeClass = 'bg-secondary';
                                 $badgeLabel = 'Hết hàng';
                             } elseif ($stock < $minStock) {
@@ -162,7 +163,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                 <td><?= e($row['unit']) ?></td>
                                 <td class="text-end"><?= e(number_format((float)$row['total_in'], 2, ',', '.')) ?></td>
                                 <td class="text-end"><?= e(number_format((float)$row['total_out'], 2, ',', '.')) ?></td>
-                                <td class="text-end fw-semibold <?= $stock <= 0 || $stock < $minStock ? 'text-danger' : '' ?>"><?= e(number_format($stock, 2, ',', '.')) ?></td>
+                                <td class="text-end fw-semibold <?= $stock <= $stockTolerance || $stock < $minStock ? 'text-danger' : '' ?>"><?= e(number_format($stock, 2, ',', '.')) ?></td>
                                 <td class="text-end"><?= e(number_format($minStock, 2, ',', '.')) ?></td>
                                 <td><span class="badge <?= $badgeClass ?>"><?= $badgeLabel ?></span></td>
                             </tr>
