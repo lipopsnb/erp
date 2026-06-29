@@ -257,7 +257,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <div class="col-md-3">
                                 <label class="form-label fw-semibold">Mã hàng</label>
                                 <input type="text" name="item_code" class="form-control" value="<?= e($formValues['item_code']) ?>" placeholder="ITM-001">
-                                <div class="form-text">Để trống hệ thống sẽ tự sinh mã dạng ITM-001.</div>
+                                <div class="form-text">Để trống hệ thống sẽ tự tạo mã dạng ITM-001.</div>
                             </div>
                             <div class="col-md-5">
                                 <label class="form-label fw-semibold">Tên hàng hoá <span class="text-danger">*</span></label>

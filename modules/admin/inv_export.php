@@ -333,7 +333,7 @@ async function updateStockInfo() {
         if (data && data.ok) {
             document.getElementById('current_stock_display').value = Number(data.stock || 0).toLocaleString('vi-VN') + ' ' + (data.unit || '');
         }
-    } catch (error) {
+    } catch (_error) {
     }
 }
 
