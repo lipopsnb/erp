@@ -205,14 +205,16 @@ function resolveAttendanceLocation(PDO $pdo, ?float $lat, ?float $lng): array {
                 $companyLng = (float)$locationConfig['lng'];
                 $radiusM    = (float)($locationConfig['radius_meters'] ?? 500);
 
-                $earthR = 6371000;
-                $dLat = deg2rad($lat - $companyLat);
-                $dLng = deg2rad($lng - $companyLng);
-                $a = sin($dLat / 2) * sin($dLat / 2)
-                    + cos(deg2rad($companyLat)) * cos(deg2rad($lat)) * sin($dLng / 2) * sin($dLng / 2);
-                $distance = $earthR * 2 * atan2(sqrt($a), sqrt(1 - $a));
+                if ($companyLat != 0.0 || $companyLng != 0.0) {
+                    $earthR = 6371000; // Earth radius in meters
+                    $dLat = deg2rad($lat - $companyLat);
+                    $dLng = deg2rad($lng - $companyLng);
+                    $a = sin($dLat / 2) * sin($dLat / 2)
+                        + cos(deg2rad($companyLat)) * cos(deg2rad($lat)) * sin($dLng / 2) * sin($dLng / 2);
+                    $distance = $earthR * 2 * atan2(sqrt($a), sqrt(1 - $a));
 
-                $flag = ($distance <= $radiusM) ? 'verified' : 'outside';
+                    $flag = ($distance <= $radiusM) ? 'verified' : 'outside';
+                }
             }
         } catch (Throwable $e) {
             $flag = 'unknown';

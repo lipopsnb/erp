@@ -40,10 +40,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCSRF($_POST['csrf_token'] ?? 
         } catch (Throwable $e) {
             $savedLocation = false;
             error_log(sprintf(
-                'Attendance check-in location save failed for user %d at %s, using legacy fields: %s',
+                'Attendance check-in location save failed for user %d at %s, using legacy fields (%s)',
                 (int)$user['id'],
                 $now,
-                $e->getMessage()
+                get_debug_type($e)
             ));
             $stmt = $pdo->prepare("INSERT IGNORE INTO attendance_logs (user_id, check_in, work_date, source) VALUES (?, ?, ?, 'manual')");
             $stmt->execute([$user['id'], $now, $today]);
@@ -63,10 +63,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCSRF($_POST['csrf_token'] ?? 
         } catch (Throwable $e) {
             $savedLocation = false;
             error_log(sprintf(
-                'Attendance check-out location save failed for user %d at %s, using legacy fields: %s',
+                'Attendance check-out location save failed for user %d at %s, using legacy fields (%s)',
                 (int)$user['id'],
                 $now,
-                $e->getMessage()
+                get_debug_type($e)
             ));
             $stmt = $pdo->prepare("UPDATE attendance_logs SET check_out = ?, work_hours = ROUND(TIMESTAMPDIFF(MINUTE, check_in, ?) / 60, 2) WHERE user_id = ? AND work_date = ? AND check_out IS NULL");
             $stmt->execute([$now, $now, $user['id'], $today]);
