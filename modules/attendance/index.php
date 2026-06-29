@@ -20,10 +20,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCSRF($_POST['csrf_token'] ?? 
     if ($lng !== null && ($lng < -180 || $lng > 180)) {
         $lng = null;
     }
-    $locationMeta = resolveAttendanceLocation($pdo, $lat, $lng);
-    $ip = $locationMeta['ip'];
-    $locationFlag = $locationMeta['flag'];
-    $savedLocation = true;
+
+    // Lấy IP
+    $ip = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['HTTP_X_REAL_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown')[0]);
+
+    // Tính location flag
+    $locationFlag = 'unknown';
+    if ($lat !== null && $lng !== null) {
+        try {
+            $configStmt = $pdo->query("SELECT config_key, config_value FROM company_location_config");
+            $locationConfig = [];
+            foreach ($configStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $locationConfig[$row['config_key']] = $row['config_value'];
+            }
+            $companyLat = (float)($locationConfig['lat'] ?? 0);
+            $companyLng = (float)($locationConfig['lng'] ?? 0);
+            $radiusM    = (float)($locationConfig['radius_meters'] ?? 500);
+
+            $earthR = 6371000;
+            $dLat   = deg2rad($lat - $companyLat);
+            $dLng   = deg2rad($lng - $companyLng);
+            $a      = sin($dLat/2)*sin($dLat/2) + cos(deg2rad($companyLat))*cos(deg2rad($lat))*sin($dLng/2)*sin($dLng/2);
+            $dist   = $earthR * 2 * atan2(sqrt($a), sqrt(1-$a));
+
+            $locationFlag = ($dist <= $radiusM) ? 'verified' : 'outside';
+        } catch (Throwable $e) {
+            $locationFlag = 'unknown';
+        }
+    } else {
+        // Kiểm tra IP whitelist
+        try {
+            $wl = $pdo->prepare("SELECT COUNT(*) FROM company_ip_whitelist WHERE ip_address = ? AND is_active = 1");
+            $wl->execute([$ip]);
+            if ((bool)$wl->fetchColumn()) {
+                $locationFlag = 'verified';
+            } else {
+                $locationFlag = 'no_gps';
+            }
+        } catch (Throwable $e) {
+            $locationFlag = 'no_gps';
+        }
+    }
+
     $flagMsg = match ($locationFlag) {
         'verified' => ' ✅ Vị trí đã xác minh',
         'outside'  => ' ⚠️ Ngoài phạm vi công ty',
@@ -32,23 +70,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCSRF($_POST['csrf_token'] ?? 
     };
 
     if ($action === 'check_in') {
+        // Kiểm tra đã có bản ghi hôm nay chưa
+        $existStmt = $pdo->prepare("SELECT id, check_in FROM attendance_logs WHERE user_id = ? AND work_date = ?");
+        $existStmt->execute([$user['id'], $today]);
+        $existing = $existStmt->fetch(PDO::FETCH_ASSOC);
+
         try {
-            $stmt = $pdo->prepare("INSERT IGNORE INTO attendance_logs
-                (user_id, check_in, work_date, source, check_in_ip, check_in_lat, check_in_lng, check_in_location_flag)
-                VALUES (?, ?, ?, 'manual', ?, ?, ?, ?)");
-            $stmt->execute([$user['id'], $now, $today, $ip, $lat, $lng, $locationFlag]);
+            if ($existing) {
+                // Đã có bản ghi: UPDATE check_in nếu chưa có
+                if (!$existing['check_in']) {
+                    $stmt = $pdo->prepare("UPDATE attendance_logs
+                        SET check_in = ?, source = 'manual',
+                            check_in_ip = ?, check_in_lat = ?, check_in_lng = ?, check_in_location_flag = ?
+                        WHERE id = ?");
+                    $stmt->execute([$now, $ip, $lat, $lng, $locationFlag, $existing['id']]);
+                }
+                // Nếu check_in đã có rồi thì không làm gì (tránh ghi đè)
+            } else {
+                // Chưa có bản ghi: INSERT mới
+                $stmt = $pdo->prepare("INSERT INTO attendance_logs
+                    (user_id, check_in, work_date, source, check_in_ip, check_in_lat, check_in_lng, check_in_location_flag)
+                    VALUES (?, ?, ?, 'manual', ?, ?, ?, ?)");
+                $stmt->execute([$user['id'], $now, $today, $ip, $lat, $lng, $locationFlag]);
+            }
         } catch (Throwable $e) {
-            $savedLocation = false;
-            error_log(sprintf(
-                'Attendance check-in location save failed for user %d at %s, using legacy fields (%s)',
-                (int)$user['id'],
-                $now,
-                get_debug_type($e)
-            ));
-            $stmt = $pdo->prepare("INSERT IGNORE INTO attendance_logs (user_id, check_in, work_date, source) VALUES (?, ?, ?, 'manual')");
-            $stmt->execute([$user['id'], $now, $today]);
+            error_log('Attendance check-in failed (with location): ' . $e->getMessage());
+            // Fallback không lưu location
+            try {
+                if ($existing) {
+                    if (!$existing['check_in']) {
+                        $pdo->prepare("UPDATE attendance_logs SET check_in = ?, source = 'manual' WHERE id = ?")
+                            ->execute([$now, $existing['id']]);
+                    }
+                } else {
+                    $pdo->prepare("INSERT INTO attendance_logs (user_id, check_in, work_date, source) VALUES (?, ?, ?, 'manual')")
+                        ->execute([$user['id'], $now, $today]);
+                }
+            } catch (Throwable $e2) {
+                error_log('Attendance check-in fallback also failed: ' . $e2->getMessage());
+            }
         }
-        setFlash('success', 'Chấm công vào ca thành công lúc ' . date('H:i') . ($savedLocation ? $flagMsg : ''));
+        setFlash('success', 'Chấm công vào ca thành công lúc ' . date('H:i') . $flagMsg);
+
     } elseif ($action === 'check_out') {
         try {
             $stmt = $pdo->prepare("UPDATE attendance_logs
@@ -61,17 +124,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCSRF($_POST['csrf_token'] ?? 
                 WHERE user_id = ? AND work_date = ? AND check_out IS NULL");
             $stmt->execute([$now, $now, $ip, $lat, $lng, $locationFlag, $user['id'], $today]);
         } catch (Throwable $e) {
-            $savedLocation = false;
-            error_log(sprintf(
-                'Attendance check-out location save failed for user %d at %s, using legacy fields (%s)',
-                (int)$user['id'],
-                $now,
-                get_debug_type($e)
-            ));
-            $stmt = $pdo->prepare("UPDATE attendance_logs SET check_out = ?, work_hours = ROUND(TIMESTAMPDIFF(MINUTE, check_in, ?) / 60, 2) WHERE user_id = ? AND work_date = ? AND check_out IS NULL");
-            $stmt->execute([$now, $now, $user['id'], $today]);
+            error_log('Attendance check-out failed (with location): ' . $e->getMessage());
+            $pdo->prepare("UPDATE attendance_logs SET check_out = ?, work_hours = ROUND(TIMESTAMPDIFF(MINUTE, check_in, ?) / 60, 2) WHERE user_id = ? AND work_date = ? AND check_out IS NULL")
+                ->execute([$now, $now, $user['id'], $today]);
         }
-        setFlash('success', 'Chấm công ra ca thành công lúc ' . date('H:i') . ($savedLocation ? $flagMsg : ''));
+        setFlash('success', 'Chấm công ra ca thành công lúc ' . date('H:i') . $flagMsg);
     }
     header('Location: /erp/modules/attendance/index.php');
     exit();
