@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS company_location_config (
     label VARCHAR(100) NULL
 );
 
+-- Giá trị mặc định bên dưới chỉ là placeholder và cần đổi sang tọa độ thực tế của công ty sau khi triển khai.
 INSERT IGNORE INTO company_location_config (config_key, config_value, label) VALUES
     ('lat', '21.0278', 'Vĩ độ công ty'),
     ('lng', '105.8342', 'Kinh độ công ty'),

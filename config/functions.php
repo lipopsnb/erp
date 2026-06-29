@@ -171,12 +171,23 @@ function currentUserId(): int {
 }
 
 function getClientIp(): string {
-    $ip = $_SERVER['HTTP_X_FORWARDED_FOR']
-        ?? $_SERVER['HTTP_X_REAL_IP']
-        ?? $_SERVER['REMOTE_ADDR']
-        ?? 'unknown';
-    $ip = trim(explode(',', (string)$ip)[0]);
-    return $ip !== '' ? $ip : 'unknown';
+    $remoteAddr = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+    if ($remoteAddr !== '' && filter_var($remoteAddr, FILTER_VALIDATE_IP)) {
+        return $remoteAddr;
+    }
+
+    foreach (['HTTP_X_REAL_IP', 'HTTP_X_FORWARDED_FOR'] as $key) {
+        if (empty($_SERVER[$key])) {
+            continue;
+        }
+
+        $candidate = trim(explode(',', (string)$_SERVER[$key])[0]);
+        if ($candidate !== '' && filter_var($candidate, FILTER_VALIDATE_IP)) {
+            return $candidate;
+        }
+    }
+
+    return 'unknown';
 }
 
 function resolveAttendanceLocation(PDO $pdo, ?float $lat, ?float $lng): array {
