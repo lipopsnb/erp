@@ -60,8 +60,8 @@ $statsStmt = $pdo->prepare("SELECT
 $statsStmt->execute($baseParams);
 $stats = $statsStmt->fetch() ?: ['total_amount' => 0, 'approved_amount' => 0, 'submitted_amount' => 0, 'rejected_amount' => 0];
 
-$categories = $pdo->query("SELECT id, category_name FROM expense_categories WHERE is_active = 1 ORDER BY category_name")
-    ->fetchAll(PDO::FETCH_ASSOC);
+$categories = getExpenseCategories($pdo);
+$hasCategories = !empty($categories);
 
 $paymentsByExpense = [];
 if ($expenses) {
@@ -94,12 +94,17 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
             <h4 class="mb-1"><i class="fas fa-file-invoice-dollar me-2 text-primary"></i>Quản lý chi phí hành chính</h4>
             <p class="text-muted mb-0">Theo dõi đề xuất chi phí, hoá đơn và tình trạng phê duyệt</p>
         </div>
-        <button class="btn btn-primary" id="btnCreateExpense">
+        <button class="btn btn-primary" id="btnCreateExpense" <?= $hasCategories ? '' : 'disabled' ?>>
             <i class="fas fa-plus me-1"></i> Tạo đề xuất
         </button>
     </div>
 
     <?php showFlash(); ?>
+    <?php if (!$hasCategories): ?>
+    <div class="alert alert-warning">
+        Chưa có loại chi phí nào. Vui lòng thêm vào bảng expense_categories.
+    </div>
+    <?php endif; ?>
 
     <div class="card border-0 shadow-sm mb-3">
         <div class="card-body py-2">
@@ -271,7 +276,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label fw-semibold">Loại chi phí <span class="text-danger">*</span></label>
-                            <select name="category_id" id="expenseCategory" class="form-select" required>
+                            <select name="category_id" id="expenseCategory" class="form-select" required <?= $hasCategories ? '' : 'disabled' ?>>
                                 <option value="">-- Chọn loại chi phí --</option>
                                 <?php foreach ($categories as $category): ?>
                                 <option value="<?= $category['id'] ?>"><?= htmlspecialchars($category['category_name']) ?></option>

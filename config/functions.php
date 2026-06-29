@@ -67,4 +67,19 @@ function generateCSRF() {
 function verifyCSRF($token) {
     return isset($_SESSION['csrf_token']) && hash_equals($_SESSION['csrf_token'], $token);
 }
+
+function getExpenseCategories($pdo) {
+    $sql = "SELECT id, category_name FROM expense_categories WHERE is_active = 1 ORDER BY category_name";
+    $categories = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    if (!empty($categories)) {
+        return $categories;
+    }
+
+    $pdo->exec("INSERT IGNORE INTO expense_categories (id, category_name) VALUES
+        (1,'Tiền điện'),(2,'Tiền nước'),(3,'Internet'),(4,'Điện thoại'),
+        (5,'Thuê văn phòng'),(6,'Chuyển phát nhanh'),(7,'Văn phòng phẩm'),
+        (8,'Vệ sinh'),(9,'Mua sắm máy móc / Thiết bị'),(10,'Mua sắm vật tư tiêu hao'),(11,'Khác')");
+
+    return $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+}
 ?>

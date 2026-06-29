@@ -15,8 +15,8 @@ if ($selectedMonth < 1 || $selectedMonth > 12) {
     $selectedMonth = (int)date('n');
 }
 
-$categories = $pdo->query("SELECT id, category_name FROM expense_categories WHERE is_active = 1 ORDER BY id")
-    ->fetchAll(PDO::FETCH_ASSOC);
+$categories = getExpenseCategories($pdo);
+$hasCategories = !empty($categories);
 $budgetStmt = $pdo->prepare('SELECT * FROM admin_budgets WHERE budget_year = ? AND budget_month = ?');
 $budgetStmt->execute([$selectedYear, $selectedMonth]);
 $budgetRows = $budgetStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -70,10 +70,15 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
             <h4 class="mb-1"><i class="fas fa-chart-pie me-2 text-primary"></i>Ngân sách hành chính</h4>
             <p class="text-muted mb-0">Đối chiếu ngân sách và thực chi theo từng loại chi phí</p>
         </div>
-        <button class="btn btn-primary" id="btnSetBudget"><i class="fas fa-sliders-h me-1"></i> Thiết lập ngân sách</button>
+        <button class="btn btn-primary" id="btnSetBudget" <?= $hasCategories ? '' : 'disabled' ?>><i class="fas fa-sliders-h me-1"></i> Thiết lập ngân sách</button>
     </div>
 
     <?php showFlash(); ?>
+    <?php if (!$hasCategories): ?>
+    <div class="alert alert-warning">
+        Chưa có loại chi phí nào. Vui lòng thêm vào bảng expense_categories.
+    </div>
+    <?php endif; ?>
 
     <div class="card border-0 shadow-sm mb-3">
         <div class="card-body py-2">
@@ -175,11 +180,26 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 </div>
 
 <script>
+const csrfBudget = '<?= $csrf ?>';
+const hasBudgetCategories = <?= $hasCategories ? 'true' : 'false' ?>;
 const budgetModal = new bootstrap.Modal(document.getElementById('modalBudget'));
-document.getElementById('btnSetBudget').addEventListener('click', () => budgetModal.show());
+document.getElementById('btnSetBudget').addEventListener('click', () => {
+    if (!hasBudgetCategories) {
+        alert('Chưa có loại chi phí nào. Vui lòng thêm vào bảng expense_categories.');
+        return;
+    }
+    budgetModal.show();
+});
 document.getElementById('btnSaveBudget').addEventListener('click', async () => {
+    if (!hasBudgetCategories) {
+        alert('Chưa có loại chi phí nào. Vui lòng thêm vào bảng expense_categories.');
+        return;
+    }
     const form = document.getElementById('formBudget');
     const fd = new FormData(form);
+    if (!fd.has('csrf_token')) {
+        fd.append('csrf_token', csrfBudget);
+    }
     fd.append('action', 'save');
     const response = await fetch('/erp/api/admin/save_budget.php', { method: 'POST', body: fd });
     const data = await response.json();
