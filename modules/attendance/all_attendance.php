@@ -49,9 +49,7 @@ $empStmt->execute($empParams);
 $employees = $empStmt->fetchAll();
 
 $attStmt = $pdo->prepare("
-    SELECT al.user_id, al.work_date, al.check_in, al.check_out,
-           al.work_hours, al.is_late, al.late_minutes, al.source,
-           al.early_leave, al.early_leave_minutes
+    SELECT al.*
     FROM attendance_logs al
     WHERE MONTH(al.work_date) = ? AND YEAR(al.work_date) = ?
     ORDER BY al.work_date
@@ -291,6 +289,8 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
             ['leg-early', '🔚 Về sớm'],
             ['leg-leave', '🏖️ Nghỉ phép'],
             ['leg-absent','✗ Vắng'],
+            ['leg-loc-ok',      '📍 Tại công ty'],
+            ['leg-loc-outside', '📍 Ngoài phạm vi'],
             ['leg-ot',    '🌙 OT'],
             ['leg-sun',   '— Chủ nhật'],
         ]; foreach ($legends as [$cls, $lbl]): ?>
@@ -413,6 +413,13 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                 if ($isLate)  $title .= " | Trễ: {$att['late_minutes']}p";
                                 if ($isEarly) $title .= " | Về sớm: {$att['early_leave_minutes']}p";
                                 if ($ot)      $title .= " | OT: {$ot['hours']}h";
+                                $locFlag = $att['check_in_location_flag'] ?? 'unknown';
+                                $locDot = match ($locFlag) {
+                                    'verified' => '<span style="font-size:7px;color:#16a34a;" title="Tại công ty">●</span>',
+                                    'outside'  => '<span style="font-size:7px;color:#d97706;" title="Ngoài phạm vi">●</span>',
+                                    'no_gps'   => '<span style="font-size:7px;color:#aaa;" title="Không có GPS">●</span>',
+                                    default    => '',
+                                };
 
                                 $content = '<div style="font-size:9px;line-height:1.4;">';
 if ($isLate && $isEarly) {
@@ -427,6 +434,7 @@ if ($isLate && $isEarly) {
 $content .= '<span style="color:#333;">' . $checkIn . '</span><br>';
 $checkOutColor = $att['check_out'] ? '#666' : '#dc2626';
 $content .= '<span style="color:' . $checkOutColor . ';">' . $checkOut . '</span>';
+$content .= $locDot ? '<br>' . $locDot : '';
 if ($ot) $content .= '<br><span style="color:#6f42c1;font-size:8px;">OT</span>';
 $content .= '</div>';
                             } else {
@@ -636,6 +644,8 @@ $content .= '</div>';
 .leg-early  { background:#fdf2f8; color:#9333ea; border:1px solid #e9d5ff; }
 .leg-leave  { background:#e8f4fd; color:#0284c7; border:1px solid #bae6fd; }
 .leg-absent { background:#fff5f5; color:#dc2626; border:1px solid #fecaca; }
+.leg-loc-ok      { background:#f0fff4; color:#16a34a; border:1px solid #bbf7d0; }
+.leg-loc-outside { background:#fffbf0; color:#d97706; border:1px solid #fde68a; }
 .leg-ot     { background:#f5f3ff; color:#6f42c1; border:1px solid #ddd6fe; }
 .leg-sun    { background:#f5f5f5; color:#aaa;    border:1px solid #e5e7eb; }
 
@@ -649,6 +659,38 @@ $content .= '</div>';
 
 <script>
 const IS_DIRECTOR = <?= json_encode($isDirector) ?>;
+
+function formatLocationFlag(flag) {
+    const map = {
+        verified: '<span class="badge bg-success"><i class="fas fa-check-circle me-1"></i>Tại công ty</span>',
+        outside:  '<span class="badge bg-warning text-dark"><i class="fas fa-exclamation-triangle me-1"></i>Ngoài phạm vi</span>',
+        no_gps:   '<span class="badge bg-secondary"><i class="fas fa-question-circle me-1"></i>Không có GPS</span>',
+        unknown:  '<span class="badge bg-light text-dark">Chưa xác định</span>',
+    };
+    return map[flag] || map.unknown;
+}
+
+function hasLocation(lat, lng) {
+    return lat !== undefined && lat !== null && lat !== '' && lng !== undefined && lng !== null && lng !== '';
+}
+
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+}
+
+function buildLocationLink(lat, lng) {
+    const rawLat = String(lat);
+    const rawLng = String(lng);
+    const safeLat = escapeHtml(rawLat);
+    const safeLng = escapeHtml(rawLng);
+    const query = encodeURIComponent(`${rawLat},${rawLng}`);
+    return `<a href="https://maps.google.com/?q=${query}" target="_blank" rel="noopener noreferrer" class="small"><i class="fas fa-map-marker-alt me-1"></i>${safeLat}, ${safeLng}</a>`;
+}
 
 async function showDayDetail(userId, dateStr, empName) {
     document.getElementById('dayDetailTitle').textContent = `📅 ${empName} — ${dateStr}`;
@@ -689,6 +731,12 @@ async function showDayDetail(userId, dateStr, empName) {
                             <td><span class="badge bg-secondary">
                                 ${data.att?.source === 'machine' ? '🖥️ Máy chấm' : '✍️ Thủ công'}
                             </span></td></tr>
+                        <tr><th>Vị trí vào</th><td>${formatLocationFlag(data.att?.check_in_location_flag)}</td></tr>
+                        <tr><th>IP vào</th><td><code class="small">${data.att?.check_in_ip ? escapeHtml(data.att.check_in_ip) : '—'}</code></td></tr>
+                        ${hasLocation(data.att?.check_in_lat, data.att?.check_in_lng) ? `<tr><th>Tọa độ vào</th><td>${buildLocationLink(data.att.check_in_lat, data.att.check_in_lng)}</td></tr>` : ''}
+                        <tr><th>Vị trí ra</th><td>${formatLocationFlag(data.att?.check_out_location_flag)}</td></tr>
+                        <tr><th>IP ra</th><td><code class="small">${data.att?.check_out_ip ? escapeHtml(data.att.check_out_ip) : '—'}</code></td></tr>
+                        ${hasLocation(data.att?.check_out_lat, data.att?.check_out_lng) ? `<tr><th>Tọa độ ra</th><td>${buildLocationLink(data.att.check_out_lat, data.att.check_out_lng)}</td></tr>` : ''}
                     </table>
                 </div>
             </div>

@@ -12,15 +12,48 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCSRF($_POST['csrf_token'] ?? 
     $action = $_POST['action'] ?? '';
     $today = date('Y-m-d');
     $now = date('Y-m-d H:i:s');
+    $lat = isset($_POST['lat']) && $_POST['lat'] !== '' && is_numeric($_POST['lat']) ? (float)$_POST['lat'] : null;
+    $lng = isset($_POST['lng']) && $_POST['lng'] !== '' && is_numeric($_POST['lng']) ? (float)$_POST['lng'] : null;
+    $locationMeta = resolveAttendanceLocation($pdo, $lat, $lng);
+    $ip = $locationMeta['ip'];
+    $locationFlag = $locationMeta['flag'];
+    $savedLocation = true;
+    $flagMsg = match ($locationFlag) {
+        'verified' => ' ✅ Vị trí đã xác minh',
+        'outside'  => ' ⚠️ Ngoài phạm vi công ty',
+        'no_gps'   => ' 📍 Không có GPS',
+        default    => '',
+    };
 
     if ($action === 'check_in') {
-        $stmt = $pdo->prepare("INSERT IGNORE INTO attendance_logs (user_id, check_in, work_date, source) VALUES (?, ?, ?, 'manual')");
-        $stmt->execute([$user['id'], $now, $today]);
-        setFlash('success', 'Chấm công vào ca thành công lúc ' . date('H:i'));
+        try {
+            $stmt = $pdo->prepare("INSERT IGNORE INTO attendance_logs
+                (user_id, check_in, work_date, source, check_in_ip, check_in_lat, check_in_lng, check_in_location_flag)
+                VALUES (?, ?, ?, 'manual', ?, ?, ?, ?)");
+            $stmt->execute([$user['id'], $now, $today, $ip, $lat, $lng, $locationFlag]);
+        } catch (Throwable $e) {
+            $savedLocation = false;
+            $stmt = $pdo->prepare("INSERT IGNORE INTO attendance_logs (user_id, check_in, work_date, source) VALUES (?, ?, ?, 'manual')");
+            $stmt->execute([$user['id'], $now, $today]);
+        }
+        setFlash('success', 'Chấm công vào ca thành công lúc ' . date('H:i') . ($savedLocation ? $flagMsg : ''));
     } elseif ($action === 'check_out') {
-        $stmt = $pdo->prepare("UPDATE attendance_logs SET check_out = ?, work_hours = ROUND(TIMESTAMPDIFF(MINUTE, check_in, ?) / 60, 2) WHERE user_id = ? AND work_date = ? AND check_out IS NULL");
-        $stmt->execute([$now, $now, $user['id'], $today]);
-        setFlash('success', 'Chấm công ra ca thành công lúc ' . date('H:i'));
+        try {
+            $stmt = $pdo->prepare("UPDATE attendance_logs
+                SET check_out = ?,
+                    work_hours = ROUND(TIMESTAMPDIFF(MINUTE, check_in, ?) / 60, 2),
+                    check_out_ip = ?,
+                    check_out_lat = ?,
+                    check_out_lng = ?,
+                    check_out_location_flag = ?
+                WHERE user_id = ? AND work_date = ? AND check_out IS NULL");
+            $stmt->execute([$now, $now, $ip, $lat, $lng, $locationFlag, $user['id'], $today]);
+        } catch (Throwable $e) {
+            $savedLocation = false;
+            $stmt = $pdo->prepare("UPDATE attendance_logs SET check_out = ?, work_hours = ROUND(TIMESTAMPDIFF(MINUTE, check_in, ?) / 60, 2) WHERE user_id = ? AND work_date = ? AND check_out IS NULL");
+            $stmt->execute([$now, $now, $user['id'], $today]);
+        }
+        setFlash('success', 'Chấm công ra ca thành công lúc ' . date('H:i') . ($savedLocation ? $flagMsg : ''));
     }
     header('Location: /erp/modules/attendance/index.php');
     exit();
@@ -139,11 +172,21 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <strong>Chú ý:</strong> Đang dùng chấm công thủ công.<br>
                             Khi lắp máy chấm công sẽ tự động.
                         </div>
-                        <form method="POST">
+                        <form method="POST" id="attendanceForm">
                             <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+                            <input type="hidden" name="lat" id="inputLat" value="">
+                            <input type="hidden" name="lng" id="inputLng" value="">
+                            <div id="gpsStatus" class="alert alert-secondary py-2 small mb-3">
+                                <i class="fas fa-map-marker-alt me-1"></i>
+                                <span id="gpsStatusText">Đang lấy vị trí GPS...</span>
+                            </div>
+                            <div class="text-muted small mb-3">
+                                <i class="fas fa-network-wired me-1"></i>
+                                IP của bạn: <code id="displayIp">Đang tải...</code>
+                            </div>
                             <?php if ($canCheckIn): ?>
                                 <input type="hidden" name="action" value="check_in">
-                                <button type="submit" class="btn btn-success btn-lg w-100 mb-2" onclick="return confirm('Xác nhận chấm công VÀO lúc ' + new Date().toLocaleTimeString('vi-VN'))">
+                                <button type="submit" class="btn btn-success btn-lg w-100 mb-2" id="btnCheckIn" onclick="return confirmAttendance('VÀO')">
                                     <i class="fas fa-sign-in-alt me-2"></i>Chấm công VÀO
                                 </button>
                             <?php elseif ($canCheckOut): ?>
@@ -151,7 +194,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                 <div class="alert alert-info py-2 small mb-2">
                                     Đã vào: <?= date('H:i', strtotime($todayLog['check_in'])) ?>
                                 </div>
-                                <button type="submit" class="btn btn-danger btn-lg w-100" onclick="return confirm('Xác nhận chấm công RA lúc ' + new Date().toLocaleTimeString('vi-VN'))">
+                                <button type="submit" class="btn btn-danger btn-lg w-100" id="btnCheckOut" onclick="return confirmAttendance('RA')">
                                     <i class="fas fa-sign-out-alt me-2"></i>Chấm công RA
                                 </button>
                             <?php endif; ?>
@@ -253,10 +296,17 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                 $content = '<div class="small text-info fw-bold">🏖️ Phép</div>';
                             } elseif ($log && $log['check_in']) {
                                 $isLate = date('H:i', strtotime($log['check_in'])) > '08:15';
+                                $locationBadge = match ($log['check_in_location_flag'] ?? 'unknown') {
+                                    'verified' => '<span class="badge bg-success badge-sm mt-1">📍✅</span>',
+                                    'outside'  => '<span class="badge bg-warning text-dark badge-sm mt-1">📍⚠️</span>',
+                                    'no_gps'   => '<span class="badge bg-secondary badge-sm mt-1">📍?</span>',
+                                    default    => '',
+                                };
                                 $cellClass .= $isLate ? ' late-cell' : ' present-cell';
                                 $content = '<div class="att-time">
                                     <span class="badge bg-success badge-sm">▶ ' . date('H:i', strtotime($log['check_in'])) . '</span><br>
-                                    <span class="badge bg-danger badge-sm mt-1">◼ ' . ($log['check_out'] ? date('H:i', strtotime($log['check_out'])) : '?') . '</span>
+                                    <span class="badge bg-danger badge-sm mt-1">◼ ' . ($log['check_out'] ? date('H:i', strtotime($log['check_out'])) : '?') . '</span>' .
+                                    $locationBadge . '
                                 </div>';
                             } else {
                                 $cellClass .= ' absent-cell';
@@ -295,5 +345,53 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 .att-time .badge-sm { font-size: 10px; padding: 2px 5px; }
 .badge-legend { font-size: 11px; padding: 3px 8px; border-radius: 20px; }
 </style>
+
+<script>
+const gpsStatusEl = document.getElementById('gpsStatus');
+const gpsTextEl = document.getElementById('gpsStatusText');
+const inputLat = document.getElementById('inputLat');
+const inputLng = document.getElementById('inputLng');
+const displayIpEl = document.getElementById('displayIp');
+
+if (displayIpEl) {
+    fetch('/erp/api/attendance/get_ip.php')
+        .then(r => r.json())
+        .then(d => {
+            displayIpEl.textContent = d.ip || 'N/A';
+        })
+        .catch(() => {
+            displayIpEl.textContent = 'N/A';
+        });
+}
+
+if (gpsStatusEl && gpsTextEl && inputLat && inputLng) {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+            (pos) => {
+                inputLat.value = pos.coords.latitude.toFixed(7);
+                inputLng.value = pos.coords.longitude.toFixed(7);
+                gpsStatusEl.className = 'alert alert-success py-2 small mb-3';
+                gpsTextEl.innerHTML = `<i class="fas fa-check-circle me-1"></i>GPS: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (±${Math.round(pos.coords.accuracy)}m)`;
+            },
+            (err) => {
+                gpsStatusEl.className = 'alert alert-warning py-2 small mb-3';
+                const msgs = {1:'Đã từ chối quyền vị trí',2:'Không lấy được vị trí',3:'Hết thời gian chờ'};
+                gpsTextEl.innerHTML = `<i class="fas fa-exclamation-triangle me-1"></i>Không có GPS: ${msgs[err.code] || 'Lỗi không xác định'}. Chấm công vẫn được nhưng sẽ không có xác minh vị trí.`;
+            },
+            { timeout: 10000, enableHighAccuracy: true }
+        );
+    } else {
+        gpsStatusEl.className = 'alert alert-warning py-2 small mb-3';
+        gpsTextEl.innerHTML = '<i class="fas fa-exclamation-triangle me-1"></i>Browser không hỗ trợ GPS.';
+    }
+}
+
+function confirmAttendance(type) {
+    const time = new Date().toLocaleTimeString('vi-VN');
+    const hasGps = inputLat && inputLat.value !== '';
+    const gpsNote = hasGps ? '' : '\n⚠️ Chưa có GPS - vị trí sẽ không được xác minh.';
+    return confirm(`Xác nhận chấm công ${type} lúc ${time}?${gpsNote}`);
+}
+</script>
 
 <?php include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/footer.php'; ?>

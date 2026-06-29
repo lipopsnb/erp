@@ -169,4 +169,64 @@ function formatCurrency($amount): string {
 function currentUserId(): int {
     return (int) ($_SESSION['user_id'] ?? 0);
 }
+
+function getClientIp(): string {
+    $ip = $_SERVER['HTTP_X_FORWARDED_FOR']
+        ?? $_SERVER['HTTP_X_REAL_IP']
+        ?? $_SERVER['REMOTE_ADDR']
+        ?? 'unknown';
+    $ip = trim(explode(',', (string)$ip)[0]);
+    return $ip !== '' ? $ip : 'unknown';
+}
+
+function resolveAttendanceLocation(PDO $pdo, ?float $lat, ?float $lng): array {
+    $ip = getClientIp();
+    $isWhitelisted = false;
+
+    try {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM company_ip_whitelist WHERE ip_address = ? AND is_active = 1");
+        $stmt->execute([$ip]);
+        $isWhitelisted = (bool)$stmt->fetchColumn();
+    } catch (Throwable $e) {
+    }
+
+    $flag = 'unknown';
+
+    if ($lat !== null && $lng !== null) {
+        try {
+            $configStmt = $pdo->query("SELECT config_key, config_value FROM company_location_config");
+            $locationConfig = [];
+            foreach ($configStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $locationConfig[$row['config_key']] = $row['config_value'];
+            }
+
+            if (isset($locationConfig['lat'], $locationConfig['lng'])) {
+                $companyLat = (float)$locationConfig['lat'];
+                $companyLng = (float)$locationConfig['lng'];
+                $radiusM    = (float)($locationConfig['radius_meters'] ?? 500);
+
+                $earthR = 6371000;
+                $dLat = deg2rad($lat - $companyLat);
+                $dLng = deg2rad($lng - $companyLng);
+                $a = sin($dLat / 2) * sin($dLat / 2)
+                    + cos(deg2rad($companyLat)) * cos(deg2rad($lat)) * sin($dLng / 2) * sin($dLng / 2);
+                $distance = $earthR * 2 * atan2(sqrt($a), sqrt(1 - $a));
+
+                $flag = ($distance <= $radiusM) ? 'verified' : 'outside';
+            }
+        } catch (Throwable $e) {
+            $flag = 'unknown';
+        }
+    } elseif ($isWhitelisted) {
+        $flag = 'verified';
+    } else {
+        $flag = 'no_gps';
+    }
+
+    return [
+        'ip' => $ip,
+        'flag' => $flag,
+        'is_whitelisted' => $isWhitelisted,
+    ];
+}
 ?>
