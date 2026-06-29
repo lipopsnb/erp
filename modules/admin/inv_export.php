@@ -326,6 +326,9 @@ async function updateStockInfo() {
 
     try {
         const response = await fetch('/erp/api/inv_stock.php?item_id=' + encodeURIComponent(itemId));
+        if (!response.ok) {
+            throw new Error('HTTP ' + response.status);
+        }
         const data = await response.json();
         if (data && data.ok) {
             document.getElementById('current_stock_display').value = Number(data.stock || 0).toLocaleString('vi-VN') + ' ' + (data.unit || '');

@@ -10,6 +10,7 @@ $pdo = getDBConnection();
 $errors = [];
 $oldInputWasFlashed = false;
 $stockTolerance = 0.0001;
+$defaultVatPercent = 10;
 $paymentStatusMap = [
     'paid' => 'Đã thanh toán',
     'unpaid' => 'Chưa thanh toán',
@@ -78,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $importDate = trim($_POST['import_date'] ?? date('Y-m-d'));
         $quantity = (float)($_POST['quantity'] ?? 0);
         $unitPrice = trim($_POST['unit_price'] ?? '') !== '' ? (float)$_POST['unit_price'] : 0;
-        $vatPercent = trim($_POST['vat_percent'] ?? '') !== '' ? (float)$_POST['vat_percent'] : 10;
+        $vatPercent = trim($_POST['vat_percent'] ?? '') !== '' ? (float)$_POST['vat_percent'] : $defaultVatPercent;
         $invoiceNo = trim($_POST['invoice_no'] ?? '') ?: null;
         $supplier = trim($_POST['supplier'] ?? '') ?: null;
         $paymentStatus = trim($_POST['payment_status'] ?? 'unpaid');
@@ -223,7 +224,7 @@ $formValues = [
     'import_date' => $editImport['import_date'] ?? date('Y-m-d'),
     'quantity' => isset($editImport['quantity']) ? (string)(float)$editImport['quantity'] : '',
     'unit_price' => isset($editImport['unit_price']) ? (string)(float)$editImport['unit_price'] : '',
-    'vat_percent' => isset($editImport['vat_percent']) ? (string)(float)$editImport['vat_percent'] : '10',
+    'vat_percent' => isset($editImport['vat_percent']) ? (string)(float)$editImport['vat_percent'] : (string)$defaultVatPercent,
     'invoice_no' => $editImport['invoice_no'] ?? '',
     'supplier' => $editImport['supplier'] ?? '',
     'payment_status' => $editImport['payment_status'] ?? 'unpaid',
