@@ -25,7 +25,7 @@ CREATE TABLE IF NOT EXISTS company_location_config (
 
 -- Giá trị mặc định bên dưới chỉ là placeholder và phải đổi sang tọa độ thực tế của công ty trước khi dùng xác minh vị trí trong production.
 INSERT IGNORE INTO company_location_config (config_key, config_value, label) VALUES
-    ('lat', '21.0278', 'Vĩ độ công ty'),
-    ('lng', '105.8342', 'Kinh độ công ty'),
+    ('lat', '0.0', 'Vĩ độ công ty'),
+    ('lng', '0.0', 'Kinh độ công ty'),
     ('radius_meters', '500', 'Bán kính cho phép (mét)'),
     ('gps_required', '0', 'Bắt buộc GPS (1=có, 0=không)');
