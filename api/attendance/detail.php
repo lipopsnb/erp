@@ -14,6 +14,18 @@ if (!$userId || !$date) { echo json_encode([]); exit; }
 $att = $pdo->prepare("SELECT * FROM attendance_logs WHERE user_id=? AND work_date=?");
 $att->execute([$userId, $date]);
 $attData = $att->fetch(PDO::FETCH_ASSOC) ?: null;
+if ($attData) {
+    $attData += [
+        'check_in_ip' => null,
+        'check_in_lat' => null,
+        'check_in_lng' => null,
+        'check_in_location_flag' => 'unknown',
+        'check_out_ip' => null,
+        'check_out_lat' => null,
+        'check_out_lng' => null,
+        'check_out_location_flag' => 'unknown',
+    ];
+}
 
 // OT
 $ot = $pdo->prepare("SELECT * FROM overtime_requests WHERE user_id=? AND ot_date=? AND status='approved'");
