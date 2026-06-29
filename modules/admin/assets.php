@@ -35,6 +35,10 @@ if ($filterCategory !== '') {
     $statsWhere[] = 'category = ?';
     $statsParams[] = $filterCategory;
 }
+if ($filterStatus !== '') {
+    $statsWhere[] = 'status = ?';
+    $statsParams[] = $filterStatus;
+}
 $statsStmt = $pdo->prepare("SELECT
         COUNT(*) AS total_assets,
         SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) AS active_assets,
@@ -213,7 +217,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                         <div class="col-md-4"><label class="form-label fw-semibold">Giá mua</label><input type="number" name="purchase_price" id="assetPurchasePrice" class="form-control text-end" step="0.01" min="0"></div>
                         <div class="col-md-4"><label class="form-label fw-semibold">Nhà cung cấp</label><input type="text" name="supplier" id="assetSupplier" class="form-control"></div>
                         <div class="col-md-4"><label class="form-label fw-semibold">Vị trí</label><input type="text" name="location" id="assetLocation" class="form-control"></div>
-                        <div class="col-md-4"><label class="form-label fw-semibold">Trạng thái</label><select name="status" id="assetStatus" class="form-select"><?php foreach ($statusMap as $value => $meta): ?><option value="<?= $value ?>"><?= $meta[1] ?></option><?php endforeach; ?></select></div>
+                        <div class="col-md-4"><label class="form-label fw-semibold">Trạng thái</label><select name="status" id="assetStatus" class="form-select"><?php foreach ($statusMap as $value => $meta): ?><?php if ($value === 'assigned') continue; ?><option value="<?= $value ?>"><?= $meta[1] ?></option><?php endforeach; ?></select></div>
                         <div class="col-md-12"><label class="form-label fw-semibold">Ghi chú</label><textarea name="note" id="assetNote" class="form-control" rows="2"></textarea></div>
                     </div>
                 </form>

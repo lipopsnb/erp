@@ -9,7 +9,8 @@ $pdo = getDBConnection();
 $user = currentUser();
 $canViewAll = hasRole('director', 'accountant', 'manager');
 $canApprove = hasRole('director', 'accountant');
-$canReject = hasRole('director');
+$canReject = hasRole('director', 'accountant');
+$canRecordPayment = hasRole('director', 'accountant', 'manager');
 $filterMonth = preg_match('/^\d{4}-\d{2}$/', $_GET['month'] ?? '') ? $_GET['month'] : date('Y-m');
 $filterCategory = (int)($_GET['category_id'] ?? 0);
 $filterStatus = trim($_GET['status'] ?? '');
@@ -179,6 +180,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <th width="180">Loại chi phí</th>
                             <th>Mục đích</th>
                             <th width="140" class="text-end">Số tiền</th>
+                            <th width="140" class="text-end">Đã TT / Còn lại</th>
                             <th width="90" class="text-center">Có HĐ</th>
                             <th width="120">Trạng thái</th>
                             <th width="210">Thao tác</th>
@@ -186,7 +188,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                     </thead>
                     <tbody>
                     <?php if (!$expenses): ?>
-                        <tr><td colspan="8" class="text-center text-muted py-4">Chưa có đề xuất chi phí nào</td></tr>
+                        <tr><td colspan="9" class="text-center text-muted py-4">Chưa có đề xuất chi phí nào</td></tr>
                     <?php else: ?>
                         <?php foreach ($expenses as $expense): ?>
                         <?php
@@ -208,6 +210,14 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                 <div class="small text-muted">Người đề xuất: <?= htmlspecialchars($expense['requested_name']) ?></div>
                             </td>
                             <td class="text-end fw-bold"><?= number_format((float)$expense['amount'], 0, ',', '.') ?></td>
+                            <?php
+                            $paidAmt = (float)$expense['paid_amount'];
+                            $remainAmt = (float)$expense['amount'] - $paidAmt;
+                            ?>
+                            <td class="text-end">
+                                <div class="text-success small"><?= number_format($paidAmt, 0, ',', '.') ?></div>
+                                <div class="small <?= $remainAmt > 0 ? 'text-danger' : 'text-muted' ?>"><?= number_format($remainAmt, 0, ',', '.') ?></div>
+                            </td>
                             <td class="text-center"><?= (int)$expense['has_invoice'] === 1 ? '<span class="badge bg-success">Có</span>' : '<span class="badge bg-light text-dark">Không</span>' ?></td>
                             <td><span class="badge bg-<?= $statusClass ?>"><?= $statusLabel ?></span></td>
                             <td>
@@ -330,6 +340,51 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                 <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body" id="expenseDetailBody"></div>
+            <div class="modal-footer" id="expenseDetailFooter" style="display:none">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Đóng</button>
+                <button type="button" class="btn btn-success" id="btnRecordPayment"><i class="fas fa-money-bill-wave me-1"></i>Ghi nhận thanh toán</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalPayment" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title"><i class="fas fa-money-bill-wave me-2"></i>Ghi nhận thanh toán</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formPayment">
+                    <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+                    <input type="hidden" name="expense_id" id="paymentExpenseId" value="">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Ngày thanh toán <span class="text-danger">*</span></label>
+                        <input type="date" name="payment_date" id="paymentDate" class="form-control" value="<?= date('Y-m-d') ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Số tiền <span class="text-danger">*</span></label>
+                        <input type="number" name="amount" id="paymentAmount" class="form-control text-end" min="0.01" step="0.01" required>
+                        <div class="form-text" id="paymentRemainingHint"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Hình thức thanh toán</label>
+                        <select name="payment_method" id="paymentMethod" class="form-select">
+                            <option value="cash">Tiền mặt</option>
+                            <option value="bank_transfer">Chuyển khoản</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Ghi chú</label>
+                        <input type="text" name="note" id="paymentNote" class="form-control">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Huỷ</button>
+                <button type="button" class="btn btn-success" id="btnSavePayment"><i class="fas fa-save me-1"></i>Lưu thanh toán</button>
+            </div>
         </div>
     </div>
 </div>
@@ -338,8 +393,11 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 const csrfExpense = '<?= $csrf ?>';
 const expensesData = <?= json_encode($expensesJson, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
 const paymentsByExpense = <?= json_encode($paymentsByExpense, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+const canRecordPayment = <?= $canRecordPayment ? 'true' : 'false' ?>;
 const expenseModal = new bootstrap.Modal(document.getElementById('modalExpense'));
 const expenseDetailModal = new bootstrap.Modal(document.getElementById('modalExpenseDetail'));
+const paymentModal = new bootstrap.Modal(document.getElementById('modalPayment'));
+let currentViewExpenseId = null;
 
 function escHtml(value) {
     return String(value || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -438,7 +496,10 @@ document.querySelectorAll('.btn-view-expense').forEach(btn => {
     btn.addEventListener('click', () => {
         const row = expensesData[btn.dataset.id];
         if (!row) return;
+        currentViewExpenseId = row.id;
         const payments = paymentsByExpense[row.id] || [];
+        const totalPaid = payments.reduce((sum, p) => sum + Number(p.amount), 0);
+        const remaining = Number(row.amount) - totalPaid;
         const paymentRows = payments.length
             ? payments.map((payment, index) => `<tr>
                 <td>${index + 1}</td>
@@ -458,6 +519,8 @@ document.querySelectorAll('.btn-view-expense').forEach(btn => {
                 <div class="col-md-6"><strong>Loại chi phí:</strong> ${escHtml(row.category_name || '')}</div>
                 <div class="col-md-6"><strong>Người đề xuất:</strong> ${escHtml(row.requested_name || '')}</div>
                 <div class="col-md-6"><strong>Số tiền:</strong> <span class="fw-bold text-primary">${formatMoney(row.amount)}</span></div>
+                <div class="col-md-6"><strong>Đã thanh toán:</strong> <span class="text-success">${formatMoney(totalPaid)}</span></div>
+                <div class="col-md-6"><strong>Còn lại:</strong> <span class="${remaining > 0 ? 'text-danger fw-bold' : 'text-muted'}">${formatMoney(remaining)}</span></div>
                 <div class="col-md-12"><strong>Mục đích:</strong><div class="mt-1">${escHtml(row.purpose || '')}</div></div>
                 <div class="col-md-6"><strong>Hoá đơn:</strong> ${Number(row.has_invoice) === 1 ? 'Có' : 'Không'}</div>
                 <div class="col-md-6"><strong>Hình thức thanh toán:</strong> ${row.payment_method === 'bank_transfer' ? 'Chuyển khoản' : 'Tiền mặt'}</div>
@@ -486,8 +549,41 @@ document.querySelectorAll('.btn-view-expense').forEach(btn => {
                     <tbody>${paymentRows}</tbody>
                 </table>
             </div>`;
+
+        const footer = document.getElementById('expenseDetailFooter');
+        const showPaymentBtn = canRecordPayment && row.status === 'approved' && remaining > 0.001;
+        footer.style.display = showPaymentBtn ? '' : 'none';
+        if (showPaymentBtn) {
+            document.getElementById('paymentExpenseId').value = row.id;
+            document.getElementById('paymentAmount').value = '';
+            document.getElementById('paymentAmount').max = remaining;
+            document.getElementById('paymentDate').value = new Date().toISOString().slice(0, 10);
+            document.getElementById('paymentNote').value = '';
+            document.getElementById('paymentRemainingHint').textContent = 'Còn lại: ' + formatMoney(remaining);
+        }
         expenseDetailModal.show();
     });
+});
+
+document.getElementById('btnRecordPayment').addEventListener('click', () => {
+    expenseDetailModal.hide();
+    paymentModal.show();
+});
+
+document.getElementById('btnSavePayment').addEventListener('click', async () => {
+    const form = document.getElementById('formPayment');
+    if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+    }
+    const fd = new FormData(form);
+    const response = await fetch('/erp/api/admin/save_payment.php', { method: 'POST', body: fd });
+    const data = await response.json();
+    if (data.ok) {
+        location.reload();
+        return;
+    }
+    alert(data.msg || 'Không thể lưu thanh toán');
 });
 
 document.querySelectorAll('.btn-submit-expense').forEach(btn => {

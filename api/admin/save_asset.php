@@ -25,6 +25,13 @@ if ($action === 'delete') {
         echo json_encode(['ok' => false, 'msg' => 'Thiếu ID']);
         exit;
     }
+    $assetCheck = $pdo->prepare('SELECT status FROM company_assets WHERE id = ?');
+    $assetCheck->execute([$id]);
+    $assetRow = $assetCheck->fetch();
+    if ($assetRow && $assetRow['status'] === 'assigned') {
+        echo json_encode(['ok' => false, 'msg' => 'Không thể xoá tài sản đang được cấp phát. Vui lòng thu hồi trước.']);
+        exit;
+    }
     $pdo->prepare('DELETE FROM company_assets WHERE id = ?')->execute([$id]);
     echo json_encode(['ok' => true, 'msg' => 'Đã xoá tài sản']);
     exit;
@@ -135,8 +142,18 @@ if (!in_array($status, ['active', 'assigned', 'maintenance', 'disposed'], true))
     echo json_encode(['ok' => false, 'msg' => 'Trạng thái không hợp lệ']);
     exit;
 }
+if ($status === 'assigned') {
+    echo json_encode(['ok' => false, 'msg' => 'Trạng thái "Đã cấp phát" chỉ được set tự động khi cấp phát tài sản']);
+    exit;
+}
 
 try {
+    $checkCode = $pdo->prepare('SELECT id FROM company_assets WHERE asset_code = ? AND id != ?');
+    $checkCode->execute([$assetCode, $id ?: 0]);
+    if ($checkCode->fetch()) {
+        echo json_encode(['ok' => false, 'msg' => 'Mã tài sản đã tồn tại trong hệ thống.']);
+        exit;
+    }
     if ($action === 'edit') {
         if (!$id) {
             throw new RuntimeException('Thiếu ID');
