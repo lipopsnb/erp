@@ -37,7 +37,7 @@ $importPageUrl = static function (array $overrides = []) use ($activeTab, $filte
     if (!empty($overrides['id'])) {
         $params['id'] = (int)$overrides['id'];
     }
-    return 'modules/admin/inv_import.php?' . http_build_query($params);
+    return '/erp/modules/admin/inv_import.php?' . http_build_query($params);
 };
 
 $isValidDate = static function (?string $value): bool {

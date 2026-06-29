@@ -42,7 +42,7 @@ $inventoryItemsUrl = static function (array $overrides = []) use ($filterCategor
     if (!empty($overrides['show_form'])) {
         $params['show_form'] = 1;
     }
-    return 'modules/admin/inv_items.php' . ($params ? '?' . http_build_query($params) : '');
+    return '/erp/modules/admin/inv_items.php' . ($params ? '?' . http_build_query($params) : '');
 };
 
 $makeItemCode = static function () use ($pdo): string {

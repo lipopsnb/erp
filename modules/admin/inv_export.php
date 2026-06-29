@@ -20,7 +20,7 @@ $exportPageUrl = static function (array $overrides = []) use ($filterMonth, $fil
     if ($itemId > 0) {
         $params['item_id'] = $itemId;
     }
-    return 'modules/admin/inv_export.php?' . http_build_query($params);
+    return '/erp/modules/admin/inv_export.php?' . http_build_query($params);
 };
 
 $isValidDate = static function (?string $value): bool {
