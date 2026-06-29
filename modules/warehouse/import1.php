@@ -47,6 +47,11 @@ $productList = $pdo->query("
     FROM product_codes WHERE is_active = 1 ORDER BY product_code
 ")->fetchAll(PDO::FETCH_ASSOC);
 
+$customers = $pdo->query("
+    SELECT id, customer_code, customer_name
+    FROM customers WHERE is_active = 1 ORDER BY customer_name
+")->fetchAll(PDO::FETCH_ASSOC);
+
 $csrf = generateCSRF();
 include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/header.php';
 include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
@@ -178,16 +183,20 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                value="<?= date('Y-m-d') ?>" required>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label fw-semibold">Mã sản phẩm <span class="text-danger">*</span></label>
-                        <select name="product_code_id" id="importProduct" class="form-select" required>
-                            <option value="">-- Chọn mã SP --</option>
-                            <?php foreach ($productList as $pl): ?>
-                            <option value="<?= $pl['id'] ?>"
-                                    data-desc="<?= htmlspecialchars($pl['description']) ?>"
-                                    data-unit="<?= htmlspecialchars($pl['unit']) ?>">
-                                [<?= htmlspecialchars($pl['product_code']) ?>] <?= htmlspecialchars($pl['description']) ?>
+                        <label class="form-label fw-semibold">Khách hàng <span class="text-danger">*</span></label>
+                        <select name="customer_id" id="importCustomer" class="form-select" required>
+                            <option value="">-- Chọn khách hàng --</option>
+                            <?php foreach ($customers as $c): ?>
+                            <option value="<?= $c['id'] ?>">
+                                [<?= htmlspecialchars($c['customer_code']) ?>] <?= htmlspecialchars($c['customer_name']) ?>
                             </option>
                             <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Mã sản phẩm <span class="text-danger">*</span></label>
+                        <select name="product_code_id" id="importProduct" class="form-select" required disabled>
+                            <option value="">-- Chọn khách hàng trước --</option>
                         </select>
                     </div>
                     <!-- Auto-fill mô tả -->
@@ -222,16 +231,61 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 </div>
 
 <script>
-// Auto-fill mô tả + đơn vị khi chọn mã SP
+// ── Chọn khách hàng → load SP theo khách hàng ─────────────────────────
+document.getElementById('importCustomer').addEventListener('change', function() {
+    const custId = this.value;
+    const selProduct = document.getElementById('importProduct');
+    selProduct.innerHTML = '<option value="">-- Chọn mã SP --</option>';
+    selProduct.disabled = true;
+    document.getElementById('importDesc').value = '';
+    document.getElementById('importUnit').textContent = '—';
+    if (!custId) return;
+    fetch('/erp/api/production/get_customer_products.php?customer_id=' + encodeURIComponent(custId))
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok && res.products.length) {
+            res.products.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p.id;
+                opt.dataset.desc = p.description;
+                opt.dataset.unit = p.unit;
+                opt.textContent = '[' + p.product_code + '] ' + p.description;
+                selProduct.appendChild(opt);
+            });
+            selProduct.disabled = false;
+        } else {
+            selProduct.innerHTML = '<option value="">-- Không có SP nào --</option>';
+        }
+    })
+    .catch(() => {
+        selProduct.innerHTML = '<option value="">-- Lỗi tải danh sách SP --</option>';
+    });
+});
+
+// ── Auto-fill mô tả + đơn vị khi chọn mã SP ──────────────────────────
 document.getElementById('importProduct').addEventListener('change', function() {
     const opt = this.options[this.selectedIndex];
-    document.getElementById('importDesc').value    = opt.dataset.desc || '';
+    document.getElementById('importDesc').value       = opt.dataset.desc || '';
     document.getElementById('importUnit').textContent = opt.dataset.unit || '—';
 });
 
-// Lưu phiếu nhập
+// ── Reset modal khi mở lại ────────────────────────────────────────────
+document.getElementById('modalImport').addEventListener('show.bs.modal', function() {
+    document.getElementById('importCustomer').value = '';
+    const selProduct = document.getElementById('importProduct');
+    selProduct.innerHTML = '<option value="">-- Chọn khách hàng trước --</option>';
+    selProduct.disabled = true;
+    document.getElementById('importDesc').value = '';
+    document.getElementById('importUnit').textContent = '—';
+    document.querySelector('#formImport [name="quantity"]').value = '';
+    document.querySelector('#formImport [name="note"]').value = '';
+});
+
+// ── Lưu phiếu nhập ───────────────────────────────────────────────────
 document.getElementById('btnSaveImport').addEventListener('click', () => {
     const form = document.getElementById('formImport');
+    // Kích hoạt select SP trước khi validate (disabled field bị bỏ qua bởi checkValidity)
+    document.getElementById('importProduct').disabled = false;
     if (!form.checkValidity()) { form.reportValidity(); return; }
 
     const btn = document.getElementById('btnSaveImport');
