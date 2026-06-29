@@ -240,7 +240,7 @@ document.getElementById('importCustomer').addEventListener('change', function() 
     document.getElementById('importDesc').value = '';
     document.getElementById('importUnit').textContent = '—';
     if (!custId) return;
-    fetch('/erp/api/production/get_customer_products.php?customer_id=' + custId)
+    fetch('/erp/api/production/get_customer_products.php?customer_id=' + encodeURIComponent(custId))
     .then(r => r.json())
     .then(res => {
         if (res.ok && res.products.length) {
@@ -256,6 +256,9 @@ document.getElementById('importCustomer').addEventListener('change', function() 
         } else {
             selProduct.innerHTML = '<option value="">-- Không có SP nào --</option>';
         }
+    })
+    .catch(() => {
+        selProduct.innerHTML = '<option value="">-- Lỗi tải danh sách SP --</option>';
     });
 });
 
