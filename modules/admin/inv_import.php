@@ -378,7 +378,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                 <div class="mt-3 d-flex gap-2">
                                     <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i><?= $editImport ? 'Cập nhật phiếu nhập' : 'Lưu phiếu nhập' ?></button>
                                     <?php if ($editImport): ?>
-                                        <a class="btn btn-outline-secondary" href="/erp/modules/admin/inv_import.php?<?= e(http_build_query(['tab' => 'history', 'month' => $filterMonth, 'item_id' => $filterItemId, 'payment_status' => $filterPaymentStatus])) ?>">Hủy</a>
+                                        <a class="btn btn-outline-secondary" href="<?= e($importPageUrl(['tab' => 'history'])) ?>">Hủy</a>
                                     <?php endif; ?>
                                 </div>
                             </form>

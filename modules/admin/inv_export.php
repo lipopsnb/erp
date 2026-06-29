@@ -332,8 +332,11 @@ async function updateStockInfo() {
         const data = await response.json();
         if (data && data.ok) {
             document.getElementById('current_stock_display').value = Number(data.stock || 0).toLocaleString('vi-VN') + ' ' + (data.unit || '');
+        } else {
+            document.getElementById('current_stock_display').value = 'Không tải được tồn kho';
         }
     } catch (_error) {
+        document.getElementById('current_stock_display').value = 'Không tải được tồn kho';
     }
 }
 
