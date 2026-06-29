@@ -671,7 +671,7 @@ function formatLocationFlag(flag) {
 }
 
 function hasLocation(lat, lng) {
-    return lat !== undefined && lat !== null && lat !== '' && lng !== undefined && lng !== null && lng !== '';
+    return Number.isFinite(Number(lat)) && Number.isFinite(Number(lng));
 }
 
 function escapeHtml(value) {
@@ -684,8 +684,14 @@ function escapeHtml(value) {
 }
 
 function buildLocationLink(lat, lng) {
-    const rawLat = String(lat);
-    const rawLng = String(lng);
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+    if (!Number.isFinite(numLat) || !Number.isFinite(numLng)) {
+        return '—';
+    }
+
+    const rawLat = numLat.toString();
+    const rawLng = numLng.toString();
     const safeLat = escapeHtml(rawLat);
     const safeLng = escapeHtml(rawLng);
     const query = encodeURIComponent(`${rawLat},${rawLng}`);
