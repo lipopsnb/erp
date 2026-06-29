@@ -12,8 +12,6 @@ $filterFrom      = $_GET['from']             ?? date('Y-m-01');
 $filterTo        = $_GET['to']               ?? date('Y-m-d');
 $filterCust      = trim($_GET['cust']        ?? '');
 $filterStatus    = $_GET['status']           ?? '';
-$warehouseOutId  = (int)($_GET['warehouse_out_id'] ?? 0);
-
 $where  = ['d.delivery_date BETWEEN ? AND ?'];
 $params = [$filterFrom, $filterTo];
 if ($filterCust)   { $where[] = 'c.customer_name LIKE ?'; $params[] = "%$filterCust%"; }
@@ -22,12 +20,10 @@ if ($filterStatus) { $where[] = 'd.status = ?';           $params[] = $filterSta
 $stmt = $pdo->prepare("
     SELECT d.*,
            c.customer_name, c.customer_code,
-           u.full_name    AS created_by_name,
-           wo.export_no
+           u.full_name    AS created_by_name
     FROM deliveries d
-    LEFT JOIN customers c     ON d.customer_id      = c.id
-    LEFT JOIN users u         ON d.created_by       = u.id
-    LEFT JOIN warehouse_out wo ON d.warehouse_out_id = wo.id
+    LEFT JOIN customers c ON d.customer_id = c.id
+    LEFT JOIN users u     ON d.created_by  = u.id
     WHERE " . implode(' AND ', $where) . "
     GROUP BY d.id
     ORDER BY d.delivery_date DESC, d.id DESC
@@ -37,15 +33,6 @@ $deliveries = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 $customers = $pdo->query("
     SELECT id, customer_code, customer_name FROM customers WHERE is_active = 1 ORDER BY customer_name
-")->fetchAll(PDO::FETCH_ASSOC);
-
-// Lấy danh sách phiếu xuất kho confirmed (để tạo giao hàng từ đó)
-$confirmedExports = $pdo->query("
-    SELECT wo.id, wo.export_no, wo.export_date, wo.customer_id, c.customer_name
-    FROM warehouse_out wo
-    JOIN customers c ON wo.customer_id = c.id
-    WHERE wo.status = 'confirmed'
-    ORDER BY wo.export_date DESC
 ")->fetchAll(PDO::FETCH_ASSOC);
 
 $csrf = generateCSRF();
@@ -111,15 +98,13 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <th width="160">Số phiếu</th>
                             <th width="110">Ngày giao</th>
                             <th>Khách hàng</th>
-                            <th>Phiếu xuất kho</th>
-                            <th class="text-end" width="140">Tổng tiền</th>
                             <th width="130">Trạng thái</th>
                             <th width="200">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody>
                     <?php if (empty($deliveries)): ?>
-                        <tr><td colspan="8" class="text-center text-muted py-4">Chưa có phiếu giao hàng nào</td></tr>
+                        <tr><td colspan="6" class="text-center text-muted py-4">Chưa có phiếu giao hàng nào</td></tr>
                     <?php else: ?>
                         <?php foreach ($deliveries as $i => $dv):
                             $statusCfg = [
@@ -138,10 +123,6 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                 <span class="badge bg-secondary me-1"><?= htmlspecialchars($dv['customer_code']) ?></span>
                                 <?php endif; ?>
                                 <?= htmlspecialchars($dv['customer_name'] ?? '—') ?>
-                            </td>
-                            <td class="small text-muted"><?= htmlspecialchars($dv['export_no'] ?? '—') ?></td>
-                            <td class="text-end fw-bold text-success">
-                                <?= number_format($dv['total_amount'], 0, ',', '.') ?> đ
                             </td>
                             <td><span class="badge <?= $sCls ?>"><?= $sLbl ?></span></td>
                             <td>
@@ -216,28 +197,16 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             </select>
                         </div>
                         <div class="col-md-5">
-                            <label class="form-label fw-semibold">Từ phiếu xuất kho (tuỳ chọn)</label>
-                            <select name="warehouse_out_id" id="dlWarehouseOut" class="form-select">
-                                <option value="">-- Chọn phiếu xuất kho --</option>
-                                <?php foreach ($confirmedExports as $ce): ?>
-                                <option value="<?= $ce['id'] ?>" data-cust="<?= $ce['customer_id'] ?>">
-                                    <?= htmlspecialchars($ce['export_no']) ?>
-                                    — <?= htmlspecialchars($ce['customer_name']) ?>
-                                    (<?= date('d/m/Y', strtotime($ce['export_date'])) ?>)
-                                </option>
-                                <?php endforeach; ?>
-                            </select>
+                            <label class="form-label fw-semibold">Ghi chú</label>
+                            <input type="text" name="note" class="form-control" placeholder="Ghi chú phiếu giao...">
                         </div>
                     </div>
-                    <div class="mb-3">
-                        <input type="text" name="note" class="form-control" placeholder="Ghi chú phiếu giao...">
-                    </div>
-                    <div class="mb-2">
-                        <button type="button" class="btn btn-sm btn-outline-info" id="btnLoadDLItems">
-                            <i class="fas fa-search me-1"></i> Load hàng từ phiếu xuất kho
-                        </button>
-                        <button type="button" class="btn btn-sm btn-outline-success ms-2" id="btnAddDLRow">
-                            <i class="fas fa-plus me-1"></i> Thêm dòng thủ công
+                    <div class="mb-2 d-flex justify-content-between align-items-center">
+                        <div id="dlStockMsg" class="text-muted small">
+                            <i class="fas fa-info-circle me-1"></i>Chọn khách hàng để xem danh sách sản phẩm tồn kho.
+                        </div>
+                        <button type="button" class="btn btn-sm btn-outline-success" id="btnAddDLRow">
+                            <i class="fas fa-plus me-1"></i> Thêm dòng
                         </button>
                     </div>
                     <div class="table-responsive">
@@ -247,20 +216,11 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                     <th width="40">#</th>
                                     <th>Mã SP</th>
                                     <th class="text-end" width="130">Số lượng</th>
-                                    <th class="text-end" width="150">Đơn giá</th>
-                                    <th class="text-end" width="150">Thành tiền</th>
                                     <th>Ghi chú</th>
                                     <th width="40"></th>
                                 </tr>
                             </thead>
                             <tbody id="dlItems"></tbody>
-                            <tfoot>
-                                <tr class="table-warning">
-                                    <td colspan="4" class="text-end fw-bold">Tổng cộng:</td>
-                                    <td class="text-end fw-bold" id="dlGrandTotal">0 đ</td>
-                                    <td colspan="2"></td>
-                                </tr>
-                            </tfoot>
                         </table>
                     </div>
                 </form>
@@ -292,98 +252,101 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 
 <script>
 const csrf = '<?= $csrf ?>';
-const productList = <?= json_encode(
-    $pdo->query("SELECT id, product_code, description, unit FROM product_codes WHERE is_active=1 ORDER BY product_code")
-        ->fetchAll(PDO::FETCH_ASSOC),
-    JSON_UNESCAPED_UNICODE
-) ?>;
 let dlRowIdx = 0;
 
 function escHtml(s) {
     return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-function buildPcOptions(selected = 0) {
-    let o = '<option value="">-- Chọn mã SP --</option>';
-    productList.forEach(p => {
-        o += `<option value="${p.id}" data-unit="${escHtml(p.unit)}" ${p.id==selected?'selected':''}>[${escHtml(p.product_code)}] ${escHtml(p.description)}</option>`;
-    });
-    return o;
-}
-
-function calcTotal() {
-    let total = 0;
-    document.querySelectorAll('#dlItems tr').forEach(tr => {
-        const qty   = parseFloat(tr.querySelector('.dl-qty')?.value   || 0);
-        const price = parseFloat(tr.querySelector('.dl-price')?.value || 0);
-        const t     = qty * price;
-        const tEl   = tr.querySelector('.dl-total');
-        if (tEl) tEl.value = Math.round(t);
-        total += t;
-    });
-    document.getElementById('dlGrandTotal').textContent = Math.round(total).toLocaleString() + ' đ';
-}
-
 function addDLRow(item = {}) {
     dlRowIdx++;
-    const n = dlRowIdx;
-    const tr = document.createElement('tr');
+    const n   = dlRowIdx;
+    const qty = parseFloat(item.qty_available) || '';
+    const tr  = document.createElement('tr');
     tr.innerHTML = `
-        <td class="text-muted small dl-rownum">${document.querySelectorAll('#dlItems tr').length+1}</td>
+        <td class="text-muted small">${document.querySelectorAll('#dlItems tr').length + 1}</td>
         <td>
-            <select name="items[${n}][product_code_id]" class="form-select form-select-sm" required>
-                ${buildPcOptions(item.product_code_id||0)}
-            </select>
+            <input type="hidden" name="items[${n}][product_code_id]" value="${escHtml(String(item.product_code_id || ''))}">
+            <input type="hidden" name="items[${n}][description]"     value="${escHtml(item.description || '')}">
+            <input type="hidden" name="items[${n}][unit]"            value="${escHtml(item.unit || '')}">
+            <span class="fw-semibold">${escHtml(item.product_code || '')}</span>
+            ${item.unit ? `<span class="text-muted small ms-1">(${escHtml(item.unit)})</span>` : ''}
         </td>
         <td>
-            <input type="number" name="items[${n}][quantity]" class="form-control form-control-sm text-end dl-qty"
-                   value="${item.quantity||''}" min="0.001" step="0.001" required>
-        </td>
-        <td>
-            <input type="number" name="items[${n}][unit_price]" class="form-control form-control-sm text-end dl-price"
-                   value="${item.unit_price||0}" min="0" step="1">
-        </td>
-        <td>
-            <input type="number" name="items[${n}][total_price]" class="form-control form-control-sm text-end dl-total"
-                   value="${item.total_price||0}" min="0" step="1" readonly>
+            <input type="number" name="items[${n}][quantity]" class="form-control form-control-sm text-end"
+                   value="${qty}" min="0.001" step="0.001" ${qty ? `max="${qty}"` : ''} required>
+            ${qty ? `<div class="form-text text-info small">Tối đa: ${parseFloat(qty).toLocaleString('vi-VN')}</div>` : ''}
         </td>
         <td>
             <input type="text" name="items[${n}][note]" class="form-control form-control-sm"
-                   value="${item.note||''}" placeholder="...">
+                   value="${escHtml(item.note || '')}" placeholder="...">
         </td>
         <td><button type="button" class="btn btn-xs btn-outline-danger btn-del-dl-row"><i class="fas fa-times"></i></button></td>`;
-    tr.querySelector('.btn-del-dl-row').addEventListener('click', () => { tr.remove(); calcTotal(); });
-    tr.querySelectorAll('.dl-qty,.dl-price').forEach(inp => inp.addEventListener('input', calcTotal));
+    tr.querySelector('.btn-del-dl-row').addEventListener('click', () => tr.remove());
     document.getElementById('dlItems').appendChild(tr);
-    calcTotal();
 }
 
+// Khi mở modal: reset, xoá bảng, hiện thông báo
 document.querySelector('[data-bs-target="#modalDL"]').addEventListener('click', () => {
     document.getElementById('formDL').reset();
     document.getElementById('dlItems').innerHTML = '';
     dlRowIdx = 0;
-    addDLRow();
+    document.getElementById('dlStockMsg').innerHTML =
+        '<i class="fas fa-info-circle me-1"></i>Chọn khách hàng để xem danh sách sản phẩm tồn kho.';
+    document.getElementById('dlStockMsg').className = 'text-muted small';
 });
 
+// Thêm dòng thủ công
 document.getElementById('btnAddDLRow').addEventListener('click', () => addDLRow());
 
-document.getElementById('btnLoadDLItems').addEventListener('click', () => {
-    const woId   = document.getElementById('dlWarehouseOut').value;
-    const custId = document.getElementById('dlCustomer').value;
-    if (!woId) { alert('Vui lòng chọn phiếu xuất kho trước'); return; }
-    fetch(`/erp/api/production/get_delivery_items.php?warehouse_out_id=${woId}&customer_id=${custId}`)
+// Khi chọn khách hàng → tự động load SP tồn kho
+document.getElementById('dlCustomer').addEventListener('change', function () {
+    const custId = this.value;
+    const body   = document.getElementById('dlItems');
+    const msg    = document.getElementById('dlStockMsg');
+    body.innerHTML = '';
+    dlRowIdx = 0;
+    if (!custId) {
+        msg.innerHTML = '<i class="fas fa-info-circle me-1"></i>Chọn khách hàng để xem danh sách sản phẩm tồn kho.';
+        msg.className = 'text-muted small';
+        return;
+    }
+    msg.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Đang tải...';
+    msg.className = 'text-muted small';
+    fetch(`/erp/api/production/get_customer_stock.php?customer_id=${custId}`)
         .then(r => r.json())
-        .then(d => {
-            if (!d.ok) { alert(d.msg); return; }
-            document.getElementById('dlItems').innerHTML = '';
-            dlRowIdx = 0;
-            d.items.forEach(it => addDLRow(it));
+        .then(res => {
+            if (!res.ok) {
+                msg.innerHTML = '<i class="fas fa-times-circle me-1"></i>Lỗi từ máy chủ: ' + escHtml(res.msg || 'Không xác định');
+                msg.className = 'text-danger small';
+                return;
+            }
+            if (!res.items || !res.items.length) {
+                msg.innerHTML = '<i class="fas fa-exclamation-circle me-1"></i>Không còn sản phẩm nào cần giao cho khách hàng này.';
+                msg.className = 'text-warning small';
+                return;
+            }
+            msg.innerHTML = `<i class="fas fa-check-circle me-1"></i>Tìm thấy ${res.items.length} sản phẩm tồn kho.`;
+            msg.className = 'text-success small';
+            res.items.forEach(item => addDLRow(item));
+        })
+        .catch(() => {
+            msg.innerHTML = '<i class="fas fa-times-circle me-1"></i>Lỗi khi tải dữ liệu.';
+            msg.className = 'text-danger small';
         });
 });
 
 document.getElementById('btnSaveDL').addEventListener('click', () => {
     const form = document.getElementById('formDL');
     if (!form.checkValidity()) { form.reportValidity(); return; }
+    const rows = document.querySelectorAll('#dlItems tr');
+    if (!rows.length) { alert('Chưa có sản phẩm nào để giao!'); return; }
+    let hasQty = false;
+    rows.forEach(r => {
+        const qtyEl = r.querySelector('input[type="number"]');
+        if (qtyEl && parseFloat(qtyEl.value) > 0) hasQty = true;
+    });
+    if (!hasQty) { alert('Vui lòng nhập số lượng giao cho ít nhất một sản phẩm!'); return; }
     const fd = new FormData(form);
     fetch('/erp/api/production/save_deliveries.php', { method: 'POST', body: fd })
         .then(r => r.json())
@@ -399,26 +362,21 @@ document.querySelectorAll('.btn-view-dl').forEach(btn => {
         const id = btn.dataset.id;
         document.getElementById('dlDetailBody').innerHTML = '<div class="text-center py-3"><i class="fas fa-spinner fa-spin"></i></div>';
         new bootstrap.Modal(document.getElementById('modalDLDetail')).show();
-        // Load từ delivery_items
         fetch(`/erp/api/invoice/get_delivery_items.php?id=${id}`)
             .then(r => r.json())
             .then(d => {
                 if (!d.ok) { document.getElementById('dlDetailBody').innerHTML = '<div class="alert alert-danger">'+d.msg+'</div>'; return; }
-                let rows = d.items.map((it,i) => `<tr>
-                    <td>${i+1}</td>
-                    <td><span class="badge bg-primary">${it.product_code}</span></td>
-                    <td>${it.description||''}</td>
-                    <td class="text-center">${it.unit||''}</td>
-                    <td class="text-end">${parseFloat(it.quantity).toLocaleString()}</td>
-                    <td class="text-end">${parseFloat(it.unit_price).toLocaleString()} đ</td>
-                    <td class="text-end fw-bold">${parseFloat(it.total_price).toLocaleString()} đ</td>
+                let rows = d.items.map((it, i) => `<tr>
+                    <td>${i + 1}</td>
+                    <td><span class="badge bg-primary">${escHtml(it.product_code)}</span></td>
+                    <td>${escHtml(it.description || '')}</td>
+                    <td class="text-center">${escHtml(it.unit || '')}</td>
+                    <td class="text-end">${parseFloat(it.quantity).toLocaleString('vi-VN')}</td>
                 </tr>`).join('');
-                const total = d.items.reduce((s,it) => s + parseFloat(it.total_price||0), 0);
                 document.getElementById('dlDetailBody').innerHTML = `
                     <table class="table table-bordered table-sm align-middle">
-                        <thead class="table-dark"><tr><th>#</th><th>Mã SP</th><th>Mô tả</th><th>ĐV</th><th class="text-end">SL</th><th class="text-end">Đơn giá</th><th class="text-end">Thành tiền</th></tr></thead>
+                        <thead class="table-dark"><tr><th>#</th><th>Mã SP</th><th>Mô tả</th><th>ĐVT</th><th class="text-end">SL</th></tr></thead>
                         <tbody>${rows}</tbody>
-                        <tfoot class="table-warning"><tr><td colspan="6" class="text-end fw-bold">Tổng:</td><td class="text-end fw-bold">${total.toLocaleString()} đ</td></tr></tfoot>
                     </table>`;
             });
     });
