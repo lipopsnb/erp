@@ -293,7 +293,7 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                         <div class="mt-3 d-flex gap-2">
                             <button type="submit" class="btn btn-primary"><i class="fas fa-save me-1"></i>Lưu hàng hoá</button>
                             <?php if ($editItem): ?>
-                                <a class="btn btn-outline-secondary" href="/erp/modules/admin/inv_items.php">Huỷ</a>
+                                <a class="btn btn-outline-secondary" href="/erp/modules/admin/inv_items.php">Hủy</a>
                             <?php endif; ?>
                         </div>
                     </form>
