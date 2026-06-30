@@ -52,17 +52,14 @@ $customers = $pdo->query("
 try {
     $productList = $pdo->query("
         SELECT pc.id, pc.product_code, pc.description, pc.unit,
-               COALESCE(pp.unit_price, 0) AS unit_price
+               COALESCE((
+                   SELECT pp.unit_price
+                   FROM product_prices pp
+                   WHERE pp.product_code_id = pc.id
+                   ORDER BY pp.effective_from DESC, pp.id DESC
+                   LIMIT 1
+               ), 0) AS unit_price
         FROM product_codes pc
-        LEFT JOIN (
-            SELECT product_code_id, unit_price
-            FROM product_prices pp1
-            WHERE effective_from = (
-                SELECT MAX(effective_from)
-                FROM product_prices pp2
-                WHERE pp2.product_code_id = pp1.product_code_id
-            )
-        ) pp ON pp.product_code_id = pc.id
         WHERE pc.is_active = 1
         ORDER BY pc.product_code
     ")->fetchAll(PDO::FETCH_ASSOC);
