@@ -11,6 +11,11 @@ $user   = currentUser();
 $errors = [];
 $editShift = null;
 
+// Thêm cột is_night_shift nếu chưa có
+try {
+    $pdo->query("ALTER TABLE work_shifts ADD COLUMN is_night_shift TINYINT(1) NOT NULL DEFAULT 0 AFTER holiday_multiplier");
+} catch (PDOException $e) { /* Cột đã tồn tại, bỏ qua */ }
+
 // ── XỬ LÝ FORM ──────────────────────────────────────────────
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCSRF($_POST['csrf_token'] ?? '')) {
     $action = $_POST['action'] ?? '';
@@ -53,6 +58,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCSRF($_POST['csrf_token'] ?? 
         $ot_multiplier       = (float)($_POST['ot_multiplier'] ?? 1.5);
         $weekend_multiplier  = (float)($_POST['weekend_multiplier'] ?? 2.0);
         $holiday_multiplier  = (float)($_POST['holiday_multiplier'] ?? 3.0);
+        $is_night_shift      = isset($_POST['is_night_shift']) ? 1 : 0;
         $color               = $_POST['color'] ?? '#0d6efd';
         $sid                 = (int)($_POST['shift_id'] ?? 0);
 
@@ -73,22 +79,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCSRF($_POST['csrf_token'] ?? 
                 $pdo->prepare("
                     INSERT INTO work_shifts
                     (shift_code, shift_name, start_time, end_time, late_threshold, break_minutes,
-                     work_hours, ot_multiplier, weekend_multiplier, holiday_multiplier, color, created_by)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?)
+                     work_hours, ot_multiplier, weekend_multiplier, holiday_multiplier, is_night_shift, color, created_by)
+                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)
                 ")->execute([$shift_code, $shift_name, $start_time, $end_time, $late_threshold,
                               $break_minutes, $work_hours, $ot_multiplier, $weekend_multiplier,
-                              $holiday_multiplier, $color, $user['id']]);
+                              $holiday_multiplier, $is_night_shift, $color, $user['id']]);
                 setFlash('success', "✅ Đã tạo ca <strong>$shift_name</strong> thành công!");
             } else {
                 $pdo->prepare("
                     UPDATE work_shifts SET
                     shift_code=?, shift_name=?, start_time=?, end_time=?, late_threshold=?,
                     break_minutes=?, work_hours=?, ot_multiplier=?, weekend_multiplier=?,
-                    holiday_multiplier=?, color=?
+                    holiday_multiplier=?, is_night_shift=?, color=?
                     WHERE id=?
                 ")->execute([$shift_code, $shift_name, $start_time, $end_time, $late_threshold,
                               $break_minutes, $work_hours, $ot_multiplier, $weekend_multiplier,
-                              $holiday_multiplier, $color, $sid]);
+                              $holiday_multiplier, $is_night_shift, $color, $sid]);
                 setFlash('success', "✅ Đã cập nhật ca <strong>$shift_name</strong>.");
             }
             header('Location: /erp/modules/attendance/shift_setup.php');
@@ -207,6 +213,15 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                         <input type="number" name="late_threshold" class="form-control form-control-sm"
                                                value="<?= $editShift['late_threshold'] ?? 15 ?>" min="0" max="60">
                                         <span class="input-group-text">phút</span>
+                                    </div>
+                                </div>
+                                <div class="col-12 mt-2">
+                                    <div class="form-check form-switch">
+                                        <input class="form-check-input" type="checkbox" name="is_night_shift" id="isNightShift"
+                                               value="1" <?= !empty($editShift['is_night_shift']) ? 'checked' : '' ?>>
+                                        <label class="form-check-label small" for="isNightShift">
+                                            🌙 Ca làm đêm (22h – 6h) — cộng thêm <strong>30% phụ trội đêm</strong> vào lương cơ bản
+                                        </label>
                                     </div>
                                 </div>
                             </div>
@@ -350,6 +365,9 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                     <span class="badge bg-danger text-white border">
                                         Lễ <?= $sh['holiday_multiplier'] ?>x
                                     </span>
+                                    <?php if (!empty($sh['is_night_shift'])): ?>
+                                    <span class="badge bg-dark text-white border">🌙 Ca đêm +30%</span>
+                                    <?php endif; ?>
                                     <span class="badge bg-primary text-white border">
                                         👥 <?= $sh['assigned_count'] ?> NV
                                     </span>

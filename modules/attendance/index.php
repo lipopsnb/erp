@@ -25,6 +25,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && verifyCSRF($_POST['csrf_token'] ?? 
         exit();
     }
 
+    // ── Kiểm tra cài đặt vị trí công ty ──────────────────────────────
+    try {
+        $locStmt = $pdo->query("SELECT * FROM attendance_location_settings LIMIT 1");
+        $locSetting = $locStmt ? $locStmt->fetch(PDO::FETCH_ASSOC) : null;
+    } catch (Throwable $e) {
+        $locSetting = null;
+    }
+
+    if ($locSetting && (int)$locSetting['is_enabled'] === 1) {
+        $R    = 6371000;
+        $lat1 = deg2rad((float)$locSetting['latitude']);
+        $lat2 = deg2rad($lat);
+        $dLat = deg2rad($lat - (float)$locSetting['latitude']);
+        $dLng = deg2rad($lng - (float)$locSetting['longitude']);
+        $a    = sin($dLat/2)*sin($dLat/2) + cos($lat1)*cos($lat2)*sin($dLng/2)*sin($dLng/2);
+        $dist = $R * 2 * atan2(sqrt($a), sqrt(1-$a));
+
+        if ($dist > (int)$locSetting['radius_meters']) {
+            $distRound = round($dist);
+            setFlash('danger', "❌ Bạn chưa có mặt tại vị trí <strong>" . htmlspecialchars($locSetting['location_name']) . "</strong>. Khoảng cách hiện tại: <strong>{$distRound}m</strong> (cho phép trong {$locSetting['radius_meters']}m).");
+            header('Location: /erp/modules/attendance/index.php');
+            exit();
+        }
+    }
+
     $ip = trim(explode(',', $_SERVER['HTTP_X_FORWARDED_FOR'] ?? $_SERVER['HTTP_X_REAL_IP'] ?? $_SERVER['REMOTE_ADDR'] ?? 'unknown')[0]);
 
     // Tính location flag
@@ -370,7 +395,34 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
 .badge-legend { font-size: 11px; padding: 3px 8px; border-radius: 20px; }
 </style>
 
+<?php
+// Lấy location setting cho JS client-side preview
+try {
+    $jsLocStmt = $pdo->query("SELECT * FROM attendance_location_settings LIMIT 1");
+    $jsLocSetting = $jsLocStmt ? $jsLocStmt->fetch(PDO::FETCH_ASSOC) : null;
+} catch (Throwable $e) {
+    $jsLocSetting = null;
+}
+?>
 <script>
+const locationConfig = <?= json_encode($jsLocSetting ? [
+    'enabled' => (bool)(int)$jsLocSetting['is_enabled'],
+    'lat'     => (float)$jsLocSetting['latitude'],
+    'lng'     => (float)$jsLocSetting['longitude'],
+    'radius'  => (int)$jsLocSetting['radius_meters'],
+    'name'    => $jsLocSetting['location_name'],
+] : ['enabled' => false]) ?>;
+
+function haversineDistance(lat1, lng1, lat2, lng2) {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat/2)*Math.sin(dLat/2) +
+              Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*
+              Math.sin(dLng/2)*Math.sin(dLng/2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
 const gpsStatusEl = document.getElementById('gpsStatus');
 const gpsTextEl   = document.getElementById('gpsStatusText');
 const inputLat    = document.getElementById('inputLat');
@@ -402,11 +454,29 @@ if (btnSubmit && gpsStatusEl && gpsTextEl && inputLat && inputLng) {
             (pos) => {
                 inputLat.value = pos.coords.latitude.toFixed(7);
                 inputLng.value = pos.coords.longitude.toFixed(7);
-                gpsStatusEl.className = 'alert alert-success py-2 small mb-2';
-                gpsTextEl.innerHTML = `<i class="fas fa-check-circle me-1"></i>
-                    GPS: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}
-                    (±${Math.round(pos.coords.accuracy)}m)`;
-                btnSubmit.disabled = false; // ← Mở khóa nút
+
+                if (locationConfig.enabled) {
+                    const dist = haversineDistance(pos.coords.latitude, pos.coords.longitude, locationConfig.lat, locationConfig.lng);
+                    const distRound = Math.round(dist);
+                    const inRange = dist <= locationConfig.radius;
+
+                    gpsStatusEl.className = 'alert py-2 small mb-2 ' + (inRange ? 'alert-success' : 'alert-danger');
+                    gpsTextEl.innerHTML = (inRange
+                        ? `<i class="fas fa-check-circle me-1"></i>✅ Tại <strong>${locationConfig.name}</strong> (~${distRound}m)`
+                        : `<i class="fas fa-exclamation-triangle me-1"></i>⚠️ Ngoài phạm vi <strong>${locationConfig.name}</strong> (~${distRound}m, cho phép ${locationConfig.radius}m)`)
+                        + ` &nbsp;<small class="opacity-75">GPS: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)}</small>`;
+
+                    if (!inRange) {
+                        btnSubmit.disabled = true;
+                        btnSubmit.title = 'Bạn đang ngoài phạm vi công ty';
+                    } else {
+                        btnSubmit.disabled = false;
+                    }
+                } else {
+                    gpsStatusEl.className = 'alert alert-success py-2 small mb-2';
+                    gpsTextEl.innerHTML = `<i class="fas fa-check-circle me-1"></i>GPS: ${pos.coords.latitude.toFixed(5)}, ${pos.coords.longitude.toFixed(5)} (±${Math.round(pos.coords.accuracy)}m)`;
+                    btnSubmit.disabled = false;
+                }
             },
             // ❌ Không lấy được GPS — khóa nút, hiện hướng dẫn
             (err) => {
