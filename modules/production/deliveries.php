@@ -176,9 +176,9 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
             </div>
             <div class="modal-body">
                 <form id="formDL">
-                    <input type="hidden" name="csrf_token"      value="<?= $csrf ?>">
-                    <input type="hidden" name="action"          value="save">
-                    <input type="hidden" name="id"              value="">
+                    <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+                    <input type="hidden" name="action"     value="save">
+                    <input type="hidden" name="id"         value="">
                     <div class="row g-3 mb-3">
                         <div class="col-md-3">
                             <label class="form-label fw-semibold">Ngày giao <span class="text-danger">*</span></label>
@@ -271,9 +271,7 @@ function addDLRow(item = {}) {
             <input type="hidden" name="items[${n}][product_code_id]" value="${escHtml(String(item.product_code_id || ''))}">
             <span class="badge bg-primary">${escHtml(item.product_code || '—')}</span>
         </td>
-        <td>
-            <span class="fw-semibold">${escHtml(item.description || '—')}</span>
-        </td>
+        <td class="fw-semibold">${escHtml(item.description || '—')}</td>
         <td class="text-muted small">${escHtml(item.unit || '')}</td>
         <td>
             <input type="number" name="items[${n}][quantity]" class="form-control form-control-sm text-end"
@@ -289,11 +287,13 @@ function addDLRow(item = {}) {
     document.getElementById('dlItems').appendChild(tr);
 }
 
-// Khi mở modal: reset, xoá bảng, hiện thông báo
+// Khi mở modal: chỉ xoá tbody + reset fields, KHÔNG reset toàn form (giữ csrf_token)
 document.querySelector('[data-bs-target="#modalDL"]').addEventListener('click', () => {
-    document.getElementById('formDL').reset();
     document.getElementById('dlItems').innerHTML = '';
     dlRowIdx = 0;
+    document.querySelector('#formDL [name="delivery_date"]').value = new Date().toISOString().slice(0,10);
+    document.querySelector('#formDL [name="customer_id"]').value = '';
+    document.querySelector('#formDL [name="note"]').value = '';
     document.getElementById('dlStockMsg').innerHTML =
         '<i class="fas fa-info-circle me-1"></i>Chọn khách hàng để xem danh sách sản phẩm tồn kho.';
     document.getElementById('dlStockMsg').className = 'text-muted small';
@@ -402,7 +402,7 @@ document.querySelectorAll('.btn-confirm-dl').forEach(btn => {
     });
 });
 
-// Xoá
+// Xoá — dùng csrf từ biến JS, KHÔNG lấy từ form (tránh bị reset)
 document.querySelectorAll('.btn-delete-dl').forEach(btn => {
     btn.addEventListener('click', () => {
         if (!confirm(`Xoá phiếu ${btn.dataset.no}?`)) return;

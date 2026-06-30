@@ -61,7 +61,6 @@ if ($action === 'confirm') {
         $existInv = $pdo->prepare("SELECT id FROM invoices WHERE delivery_id = ?");
         $existInv->execute([$id]);
         if (!$existInv->fetch()) {
-            // Lấy thông tin delivery
             $del = $pdo->prepare("SELECT * FROM deliveries WHERE id = ?");
             $del->execute([$id]);
             $del = $del->fetch(PDO::FETCH_ASSOC);
@@ -77,7 +76,7 @@ if ($action === 'confirm') {
 
                 $invoiceId = (int)$pdo->lastInsertId();
 
-                // Copy delivery_items → invoice_items với giá từ customer_prices
+                // Copy delivery_items → invoice_items
                 // FIX: lấy description và unit từ product_codes (delivery_items không có 2 cột này)
                 $items = $pdo->prepare("
                     SELECT di.product_code_id,
@@ -96,8 +95,7 @@ if ($action === 'confirm') {
 
                 $subtotal = 0;
 
-                // Kiểm tra một lần xem customer_prices có cột effective_date không
-                $hasEffectiveDate = false;
+                // Kiểm tra customer_prices có cột effective_date không
                 $colCheck = $pdo->prepare("
                     SELECT COUNT(*) FROM information_schema.COLUMNS
                     WHERE TABLE_SCHEMA = DATABASE()
@@ -108,7 +106,6 @@ if ($action === 'confirm') {
                 $hasEffectiveDate = (bool)$colCheck->fetchColumn();
 
                 foreach ($items as $item) {
-                    // Lấy giá từ customer_prices
                     $unitPrice = false;
                     if ($hasEffectiveDate) {
                         $priceStmt = $pdo->prepare("
@@ -129,7 +126,6 @@ if ($action === 'confirm') {
                     $priceStmt->execute([$del['customer_id'], $item['product_code_id']]);
                     $unitPrice = $priceStmt->fetchColumn();
 
-                    // Fallback về giá trong phiếu giao nếu không tìm thấy customer_prices
                     if ($unitPrice === false || $unitPrice === null) {
                         $unitPrice = $item['unit_price'] ?? 0;
                     }
@@ -151,7 +147,6 @@ if ($action === 'confirm') {
                     ]);
                 }
 
-                // Cập nhật subtotal và total_amount
                 $pdo->prepare("UPDATE invoices SET subtotal = ?, total_amount = ? WHERE id = ?")
                     ->execute([$subtotal, $subtotal, $invoiceId]);
             }
@@ -218,7 +213,6 @@ try {
         ")->execute([$deliveryDate, $customerId, $warehouseOutId, $grandTotal, $note, $id]);
         $pdo->prepare("DELETE FROM delivery_items WHERE delivery_id = ?")->execute([$id]);
     } else {
-        // Sinh số phiếu DL-YYYYMMDD-XXX
         $pdo->prepare("
             INSERT INTO document_sequences (doc_type, doc_date, last_seq) VALUES ('DL',?,1)
             ON DUPLICATE KEY UPDATE last_seq = last_seq + 1
