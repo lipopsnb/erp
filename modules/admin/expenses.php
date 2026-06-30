@@ -356,7 +356,7 @@ if ($filterCategory > 0) {
     $baseWhere[] = 'er.category_id = ?';
     $params[] = $filterCategory;
 }
-if ($filterStatus !== '') {
+if ($filterStatus !== '' && $activeTab === 'mine') {
     $baseWhere[] = 'er.status = ?';
     $params[] = $filterStatus;
 }

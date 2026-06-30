@@ -5,10 +5,10 @@ date_default_timezone_set('Asia/Ho_Chi_Minh');
 function getDBConnection() {
     static $pdo = null;
     if ($pdo === null) {
-        $host   = 'localhost';
-        $dbname = 'liprolog_erp';
-        $user   = 'liprolog_erp';
-        $pass   = 'dung@123A';
+        $host   = getenv('DB_HOST') ?: 'localhost';
+        $dbname = getenv('DB_NAME') ?: 'erp';
+        $user   = getenv('DB_USER') ?: 'root';
+        $pass   = getenv('DB_PASS') ?: '';
         $pdo = new PDO(
             "mysql:host=$host;dbname=$dbname;charset=utf8mb4",
             $user, $pass,

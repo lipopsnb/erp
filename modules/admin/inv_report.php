@@ -7,6 +7,7 @@ requireLogin();
 requireRole('director', 'accountant', 'manager');
 
 $pdo = getDBConnection();
+// Categories for inv_items (internal supply items). NOT the same as assets.php $categoryMap (company_assets table).
 $categoryMap = [
     'consumable' => 'Vật tư tiêu hao',
     'stationery' => 'Văn phòng phẩm',
