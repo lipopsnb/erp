@@ -26,7 +26,7 @@ $user   = currentUser();
 $action = trim($_POST['action'] ?? 'save');
 $id     = (int)($_POST['id'] ?? 0);
 
-// ── Xoá ─────────────────────────────────────────────────────────────────
+// ── Xoá ──────────────────────────────────────────────────────────────────
 if ($action === 'delete') {
     if (!$id) { echo json_encode(['ok' => false, 'msg' => 'Thiếu ID']); exit; }
     $row = $pdo->prepare("SELECT status FROM deliveries WHERE id = ?");
@@ -78,11 +78,18 @@ if ($action === 'confirm') {
                 $invoiceId = (int)$pdo->lastInsertId();
 
                 // Copy delivery_items → invoice_items với giá từ customer_prices
+                // FIX: lấy description và unit từ product_codes (delivery_items không có 2 cột này)
                 $items = $pdo->prepare("
-                    SELECT di.*, pc.description, pc.unit
+                    SELECT di.product_code_id,
+                           di.quantity,
+                           di.unit_price,
+                           di.total_price,
+                           pc.description,
+                           pc.unit
                     FROM delivery_items di
                     JOIN product_codes pc ON di.product_code_id = pc.id
                     WHERE di.delivery_id = ?
+                    ORDER BY di.id
                 ");
                 $items->execute([$id]);
                 $items = $items->fetchAll(PDO::FETCH_ASSOC);
@@ -161,11 +168,11 @@ if ($action === 'confirm') {
 }
 
 // ── Tạo / Sửa ────────────────────────────────────────────────────────────
-$deliveryDate  = trim($_POST['delivery_date']   ?? date('Y-m-d'));
-$customerId    = (int)($_POST['customer_id']    ?? 0);
+$deliveryDate   = trim($_POST['delivery_date']    ?? date('Y-m-d'));
+$customerId     = (int)($_POST['customer_id']     ?? 0);
 $warehouseOutId = (int)($_POST['warehouse_out_id'] ?? 0) ?: null;
-$note          = trim($_POST['note']            ?? '') ?: null;
-$items         = $_POST['items'] ?? [];
+$note           = trim($_POST['note']             ?? '') ?: null;
+$items          = $_POST['items'] ?? [];
 
 if (!$deliveryDate || !$customerId) {
     echo json_encode(['ok' => false, 'msg' => 'Thiếu ngày hoặc khách hàng']); exit;
