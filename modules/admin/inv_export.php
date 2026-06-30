@@ -62,13 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$export) {
             setFlash('danger', 'Không tìm thấy phiếu xuất.');
         } else {
-            $currentStock = (float)fetchScalarSafe(
-                $pdo,
-                'SELECT COALESCE((SELECT SUM(quantity) FROM inv_imports WHERE item_id = ?), 0) - COALESCE((SELECT SUM(quantity) FROM inv_exports WHERE item_id = ?), 0)',
-                [(int)$export['item_id'], (int)$export['item_id']],
-                0
-            );
-            // Restoring the exported quantity must not cause stock to go negative
+            // Deleting an export always restores stock (never causes negative stock), so no stock check needed.
             $pdo->prepare('DELETE FROM inv_exports WHERE id = ?')->execute([$id]);
             setFlash('success', 'Đã xoá phiếu xuất.');
         }

@@ -16,6 +16,7 @@ $categoryMap = [
     'other' => 'Khác',
 ];
 $selectedMonth = preg_match('/^\d{4}-\d{2}$/', $_GET['month'] ?? '') ? (string)$_GET['month'] : date('Y-m');
+$filterCategory = trim($_GET['category'] ?? '');
 $startDate = $selectedMonth . '-01';
 $endDate = date('Y-m-t', strtotime($startDate));
 

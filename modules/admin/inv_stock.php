@@ -19,6 +19,7 @@ $categoryMap = [
 $filterCategory = trim($_GET['category'] ?? '');
 
 $where = ['1=1'];
+$params = [];
 if ($filterCategory !== '' && isset($categoryMap[$filterCategory])) {
     $where[] = 'i.category = ?';
     $params[] = $filterCategory;
