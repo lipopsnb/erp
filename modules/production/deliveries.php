@@ -214,7 +214,9 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <thead class="table-light">
                                 <tr>
                                     <th width="40">#</th>
-                                    <th>Mã SP</th>
+                                    <th width="130">Mã SP</th>
+                                    <th>Tên sản phẩm</th>
+                                    <th width="80">ĐVT</th>
                                     <th class="text-end" width="130">Số lượng</th>
                                     <th>Ghi chú</th>
                                     <th width="40"></th>
@@ -267,15 +269,16 @@ function addDLRow(item = {}) {
         <td class="text-muted small">${document.querySelectorAll('#dlItems tr').length + 1}</td>
         <td>
             <input type="hidden" name="items[${n}][product_code_id]" value="${escHtml(String(item.product_code_id || ''))}">
-            <input type="hidden" name="items[${n}][description]"     value="${escHtml(item.description || '')}">
-            <input type="hidden" name="items[${n}][unit]"            value="${escHtml(item.unit || '')}">
-            <span class="fw-semibold">${escHtml(item.product_code || '')}</span>
-            ${item.unit ? `<span class="text-muted small ms-1">(${escHtml(item.unit)})</span>` : ''}
+            <span class="badge bg-primary">${escHtml(item.product_code || '—')}</span>
         </td>
+        <td>
+            <span class="fw-semibold">${escHtml(item.description || '—')}</span>
+        </td>
+        <td class="text-muted small">${escHtml(item.unit || '')}</td>
         <td>
             <input type="number" name="items[${n}][quantity]" class="form-control form-control-sm text-end"
                    value="${qty}" min="0.001" step="0.001" ${qty ? `max="${qty}"` : ''} required>
-            ${qty ? `<div class="form-text text-info small">Tối đa: ${parseFloat(qty).toLocaleString('vi-VN')}</div>` : ''}
+            ${qty ? `<div class="form-text text-info" style="font-size:10px;">Tối đa: ${parseFloat(qty).toLocaleString('vi-VN')}</div>` : ''}
         </td>
         <td>
             <input type="text" name="items[${n}][note]" class="form-control form-control-sm"
