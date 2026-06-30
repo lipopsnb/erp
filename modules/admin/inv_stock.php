@@ -8,6 +8,7 @@ requireRole('director', 'accountant', 'manager', 'warehouse');
 
 $pdo = getDBConnection();
 $stockTolerance = 0.0001;
+// Categories for inv_items (internal supply items). NOT the same as assets.php $categoryMap (company_assets table).
 $categoryMap = [
     'consumable' => 'Vật tư tiêu hao',
     'stationery' => 'Văn phòng phẩm',
@@ -18,7 +19,6 @@ $categoryMap = [
 $filterCategory = trim($_GET['category'] ?? '');
 
 $where = ['1=1'];
-$params = [];
 if ($filterCategory !== '' && isset($categoryMap[$filterCategory])) {
     $where[] = 'i.category = ?';
     $params[] = $filterCategory;

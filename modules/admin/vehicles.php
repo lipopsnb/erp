@@ -146,6 +146,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             setFlash('danger', 'Không tìm thấy xe cần thêm hồ sơ.');
         } elseif (!isset($docTypeMap[$docType]) || !$isValidDate($startDate) || !$isValidDate($endDate)) {
             setFlash('danger', 'Dữ liệu hồ sơ xe không hợp lệ.');
+        } elseif ($endDate < $startDate) {
+            setFlash('danger', 'Ngày kết thúc phải lớn hơn hoặc bằng ngày bắt đầu.');
         } else {
             $pdo->prepare('INSERT INTO vehicle_documents (vehicle_id, doc_type, start_date, end_date, cost, provider, note, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
                 ->execute([$vehicleId, $docType, $startDate, $endDate, $cost, $provider, $note, currentUserId()]);

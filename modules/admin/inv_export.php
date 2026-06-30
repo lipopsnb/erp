@@ -34,7 +34,7 @@ $isValidDate = static function (?string $value): bool {
 
 $generateExportNo = static function (string $exportDate) use ($pdo): string {
     $dateKey = date('Ymd', strtotime($exportDate));
-    $prefix = 'EXP-' . $dateKey . '-';
+    $prefix = 'INVEXP-' . $dateKey . '-';
     $last = (string)fetchScalarSafe(
         $pdo,
         'SELECT export_no FROM inv_exports WHERE export_no LIKE ? ORDER BY id DESC LIMIT 1',
@@ -54,6 +54,27 @@ foreach ($items as $itemRow) {
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     ensurePostCsrf();
+    $action = trim($_POST['action'] ?? 'create');
+
+    if ($action === 'delete') {
+        $id = (int)($_POST['id'] ?? 0);
+        $export = fetchOneSafe($pdo, 'SELECT * FROM inv_exports WHERE id = ? LIMIT 1', [$id]);
+        if (!$export) {
+            setFlash('danger', 'Không tìm thấy phiếu xuất.');
+        } else {
+            $currentStock = (float)fetchScalarSafe(
+                $pdo,
+                'SELECT COALESCE((SELECT SUM(quantity) FROM inv_imports WHERE item_id = ?), 0) - COALESCE((SELECT SUM(quantity) FROM inv_exports WHERE item_id = ?), 0)',
+                [(int)$export['item_id'], (int)$export['item_id']],
+                0
+            );
+            // Restoring the exported quantity must not cause stock to go negative
+            $pdo->prepare('DELETE FROM inv_exports WHERE id = ?')->execute([$id]);
+            setFlash('success', 'Đã xoá phiếu xuất.');
+        }
+        redirect($exportPageUrl(['month' => $filterMonth]));
+    }
+
     $itemId = (int)($_POST['item_id'] ?? 0);
     $exportDate = trim($_POST['export_date'] ?? date('Y-m-d'));
     $quantity = (float)($_POST['quantity'] ?? 0);
@@ -279,12 +300,13 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <th>Mục đích</th>
                             <th>Phòng ban</th>
                             <th>Người đề nghị</th>
+                            <th></th>
                         </tr>
                     </thead>
                     <tbody>
                     <?php if (!$exports): ?>
                         <tr>
-                            <td colspan="7" class="text-center text-muted py-4">Chưa có phiếu xuất nào.</td>
+                            <td colspan="8" class="text-center text-muted py-4">Chưa có phiếu xuất nào.</td>
                         </tr>
                     <?php else: ?>
                         <?php foreach ($exports as $export): ?>
@@ -299,6 +321,16 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                                 <td><?= e($export['purpose']) ?></td>
                                 <td><?= e($export['department'] ?: '—') ?></td>
                                 <td><?= e($export['requested_by_name'] ?: '—') ?></td>
+                                <td>
+                                    <form method="post" onsubmit="return confirm('Bạn có chắc muốn xoá phiếu xuất này?');">
+                                        <?= csrfInput() ?>
+                                        <input type="hidden" name="action" value="delete">
+                                        <input type="hidden" name="id" value="<?= (int)$export['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
                             </tr>
                         <?php endforeach; ?>
                     <?php endif; ?>

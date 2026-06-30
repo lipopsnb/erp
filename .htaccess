@@ -7,5 +7,5 @@ RewriteBase /erp/
 # Redirect / về login
 RewriteRule ^$ login.php [R=302,L]
 
-php_flag display_errors on
-php_value error_reporting 32767
+php_flag display_errors off
+php_value error_reporting 0

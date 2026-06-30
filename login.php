@@ -45,7 +45,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['department_id'] = $user['department_id'];
                 $_SESSION['login_time']    = time();
 
-                $redirect = $_GET['redirect'] ?? '/erp/dashboard.php';
+                $redirectRaw = $_GET['redirect'] ?? '';
+                $redirect = (str_starts_with($redirectRaw, '/erp/') && !str_contains($redirectRaw, '//'))
+                    ? $redirectRaw
+                    : '/erp/dashboard.php';
                 header("Location: " . $redirect);
                 exit();
             } elseif ($user && !$user['is_active']) {

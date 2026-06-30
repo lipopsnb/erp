@@ -119,7 +119,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 clearOldInput();
                 redirect($inventoryItemsUrl());
             } catch (Throwable $e) {
-                $errors[] = 'Không thể lưu hàng hoá.';
+                if (str_contains($e->getMessage(), 'Duplicate entry')) {
+                    $errors[] = 'Mã hàng hoá đã tồn tại. Vui lòng thử lại.';
+                } else {
+                    $errors[] = 'Không thể lưu hàng hoá.';
+                }
             }
         }
     }
