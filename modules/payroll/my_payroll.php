@@ -255,6 +255,16 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             <td class="text-end"><?= number_format($slipDetail[$key], 0, '.', ',') ?></td>
                         </tr>
                         <?php endforeach; ?>
+                        <?php if ((float)($slipDetail['night_shift_bonus'] ?? 0) > 0): ?>
+                        <tr class="table-dark">
+                            <td class="text-white small">
+                                (15b) 🌙 Phụ trội làm đêm / Night shift bonus (30%)
+                            </td>
+                            <td class="text-end text-white fw-bold">
+                                +<?= number_format((float)$slipDetail['night_shift_bonus'], 0, '.', ',') ?>
+                            </td>
+                        </tr>
+                        <?php endif; ?>
                         <!-- Chuyên cần thực nhận -->
                         <tr>
                             <td class="text-muted small">
@@ -301,6 +311,15 @@ include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
                             </td>
                             <td class="text-end"><?= number_format($slipDetail['ot_holiday_amount'], 0, '.', ',') ?></td>
                         </tr>
+                        <?php if ((float)($slipDetail['ot_night_hours'] ?? 0) > 0): ?>
+                        <tr>
+                            <td class="text-muted small">
+                                (24b) 🌙 Làm thêm ban đêm / OT night (130%)
+                                <span class="text-muted">[<?= number_format($slipDetail['ot_night_hours'], 2) ?>h]</span>
+                            </td>
+                            <td class="text-end"><?= number_format($slipDetail['ot_night_amount'], 0, '.', ',') ?></td>
+                        </tr>
+                        <?php endif; ?>
                         <tr class="bg-light">
                             <td class="fw-semibold small">(25) Tổng tiền làm thêm / Total OT salary</td>
                             <td class="text-end fw-bold"><?= number_format($slipDetail['total_ot_amount'], 0, '.', ',') ?></td>
