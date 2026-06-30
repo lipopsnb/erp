@@ -49,13 +49,24 @@ $customers = $pdo->query("
     SELECT id, customer_name, customer_code FROM customers WHERE is_active=1 ORDER BY customer_name
 ")->fetchAll(PDO::FETCH_ASSOC);
 
-$productList = $pdo->query("
-    SELECT pc.id, pc.product_code, pc.description, pc.unit,
-           COALESCE(p.unit_price,0) AS unit_price
-    FROM product_codes pc
-    LEFT JOIN prices p ON p.product_code_id = pc.id
-    WHERE pc.is_active = 1 ORDER BY pc.product_code
-")->fetchAll(PDO::FETCH_ASSOC);
+try {
+    $productList = $pdo->query("
+        SELECT pc.id, pc.product_code, pc.description, pc.unit,
+               COALESCE((
+                   SELECT pp.unit_price
+                   FROM product_prices pp
+                   WHERE pp.product_code_id = pc.id
+                   ORDER BY pp.effective_from DESC, pp.id DESC
+                   LIMIT 1
+               ), 0) AS unit_price
+        FROM product_codes pc
+        WHERE pc.is_active = 1
+        ORDER BY pc.product_code
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    error_log('invoice/index productList error: ' . $e->getMessage());
+    $productList = [];
+}
 
 // Biên bản chưa xuất HĐ
 $pendingDeliveries = $pdo->query("
