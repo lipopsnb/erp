@@ -1,0 +1,980 @@
+<?php
+require_once $_SERVER['DOCUMENT_ROOT'] . '/erp/config/database.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/erp/config/auth.php';
+require_once $_SERVER['DOCUMENT_ROOT'] . '/erp/config/functions.php';
+requireLogin();
+requireRole('director','accountant','manager');
+
+$pdo  = getDBConnection();
+$user = currentUser();
+
+$filterFrom   = $_GET['from']   ?? date('Y-m-01');
+$filterTo     = $_GET['to']     ?? date('Y-m-d');
+$filterCust   = trim($_GET['cust']   ?? '');
+$filterStatus = $_GET['status'] ?? '';
+
+// Khi lọc theo trạng thái nháp (draft), bỏ điều kiện ngày vì invoice_date = NULL
+$where  = [];
+$params = [];
+if ($filterStatus !== 'draft') {
+    $where[]  = 'i.invoice_date BETWEEN ? AND ?';
+    $params[] = $filterFrom;
+    $params[] = $filterTo;
+}
+if ($filterCust) { $where[] = 'c.customer_name LIKE ?'; $params[] = "%$filterCust%"; }
+if ($filterStatus) { $where[] = 'i.status = ?'; $params[] = $filterStatus; }
+if (empty($where)) { $where[] = '1=1'; }
+
+$invoices = $pdo->prepare("
+    SELECT i.*,
+           c.customer_name, c.customer_code,
+           u.full_name AS created_by_name,
+           COALESCE(SUM(p.amount),0) AS paid_amount
+    FROM invoices i
+    LEFT JOIN customers c  ON i.customer_id  = c.id
+    LEFT JOIN users u      ON i.created_by   = u.id
+    LEFT JOIN payments p   ON p.invoice_id   = i.id
+    WHERE " . implode(' AND ', $where) . "
+    GROUP BY i.id
+    ORDER BY i.invoice_date DESC, i.id DESC
+");
+$invoices->execute($params);
+$invoices = $invoices->fetchAll(PDO::FETCH_ASSOC);
+
+$totalAmount = array_sum(array_column($invoices, 'total_amount'));
+$totalPaid   = array_sum(array_column($invoices, 'paid_amount'));
+$totalDebt   = $totalAmount - $totalPaid;
+
+$customers = $pdo->query("
+    SELECT id, customer_name, customer_code FROM customers WHERE is_active=1 ORDER BY customer_name
+")->fetchAll(PDO::FETCH_ASSOC);
+
+<<<<<<< HEAD
+=======
+try {
+    $productList = $pdo->query("
+        SELECT pc.id, pc.product_code, pc.description, pc.unit,
+               COALESCE((
+                   SELECT pp.unit_price
+                   FROM product_prices pp
+                   WHERE pp.product_code_id = pc.id
+                   ORDER BY pp.effective_from DESC, pp.id DESC
+                   LIMIT 1
+               ), 0) AS unit_price
+        FROM product_codes pc
+        WHERE pc.is_active = 1
+        ORDER BY pc.product_code
+    ")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    error_log('invoice/index productList error: ' . $e->getMessage());
+    $productList = [];
+}
+
+// Biên bản chưa xuất HĐ
+$pendingDeliveries = $pdo->query("
+    SELECT d.id, d.delivery_no, d.delivery_date, d.total_amount,
+           c.customer_name, d.customer_id
+    FROM deliveries d
+    LEFT JOIN customers c ON d.customer_id = c.id
+    WHERE d.status = 'confirmed'
+    ORDER BY d.delivery_date DESC
+")->fetchAll(PDO::FETCH_ASSOC);
+
+>>>>>>> 2d78dfa9065c6d955e30172aa04de19c7e992c2f
+$csrf = generateCSRF();
+
+$draftCount = $pdo->query("SELECT COUNT(*) FROM invoices WHERE status = 'draft'")->fetchColumn();
+include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/header.php';
+include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/sidebar.php';
+?>
+<div class="main-content">
+<div class="container-fluid py-4">
+
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <div>
+            <h4 class="mb-1"><i class="fas fa-file-invoice me-2 text-primary"></i>Hoá đơn
+                <?php if ($draftCount > 0): ?>
+                <span class="badge bg-warning text-dark ms-2"><?= $draftCount ?> chờ xuất</span>
+                <?php endif; ?>
+            </h4>
+            <p class="text-muted mb-0">Quản lý hoá đơn bán hàng</p>
+        </div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalInvoice">
+            <i class="fas fa-plus me-1"></i> Tạo hoá đơn
+        </button>
+    </div>
+
+    <?php showFlash(); ?>
+
+    <!-- Thống kê nhanh -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center py-3">
+                <div class="fs-5 fw-bold text-primary"><?= number_format($totalAmount) ?> đ</div>
+                <div class="text-muted small">Tổng hoá đơn</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center py-3">
+                <div class="fs-5 fw-bold text-success"><?= number_format($totalPaid) ?> đ</div>
+                <div class="text-muted small">Đã thu</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-0 shadow-sm text-center py-3">
+                <div class="fs-5 fw-bold text-danger"><?= number_format($totalDebt) ?> đ</div>
+                <div class="text-muted small">Còn nợ</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Filter -->
+    <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body py-2">
+            <form class="row g-2 align-items-center" method="GET">
+                <div class="col-auto">
+                    <input type="date" name="from" class="form-control form-control-sm" value="<?= $filterFrom ?>">
+                </div>
+                <div class="col-auto"><span class="text-muted">→</span></div>
+                <div class="col-auto">
+                    <input type="date" name="to" class="form-control form-control-sm" value="<?= $filterTo ?>">
+                </div>
+                <div class="col-md-2">
+                    <input type="text" name="cust" class="form-control form-control-sm"
+                           placeholder="Khách hàng..." value="<?= htmlspecialchars($filterCust) ?>">
+                </div>
+                <div class="col-md-2">
+                    <select name="status" class="form-select form-select-sm">
+                        <option value="">-- Trạng thái --</option>
+                        <option value="draft"    <?= $filterStatus==='draft'    ?'selected':'' ?>>Chờ xuất hoá đơn</option>
+                        <option value="unpaid"   <?= $filterStatus==='unpaid'   ?'selected':'' ?>>Chưa thanh toán</option>
+                        <option value="partial"  <?= $filterStatus==='partial'  ?'selected':'' ?>>Thanh toán 1 phần</option>
+                        <option value="paid"     <?= $filterStatus==='paid'     ?'selected':'' ?>>Đã thanh toán</option>
+                        <option value="cancelled"<?= $filterStatus==='cancelled'?'selected':'' ?>>Đã huỷ</option>
+                    </select>
+                </div>
+                <div class="col-auto">
+                    <button type="submit" class="btn btn-sm btn-primary">
+                        <i class="fas fa-filter me-1"></i>Lọc
+                    </button>
+                    <a href="?" class="btn btn-sm btn-outline-secondary ms-1">Reset</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bảng hoá đơn -->
+    <div class="card border-0 shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Số HĐ</th>
+                            <th>Ngày HĐ</th>
+                            <th>Khách hàng</th>
+                            <th class="text-end">Tổng tiền</th>
+                            <th class="text-end">Đã thu</th>
+                            <th class="text-end">Còn nợ</th>
+                            <th>Trạng thái</th>
+                            <th>Hạn TT</th>
+                            <th>Thao tác</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php if (empty($invoices)): ?>
+                        <tr><td colspan="9" class="text-center text-muted py-4">Chưa có hoá đơn nào</td></tr>
+                    <?php else: ?>
+                        <?php foreach ($invoices as $inv):
+                            $debt    = $inv['total_amount'] - $inv['paid_amount'];
+                            $overdue = $inv['due_date'] && $inv['status'] !== 'paid' && $inv['status'] !== 'draft' && $inv['due_date'] < date('Y-m-d');
+                        ?>
+                        <tr class="<?= $overdue ? 'table-danger' : '' ?>">
+                            <td class="fw-semibold text-primary">
+                                <?= htmlspecialchars($inv['invoice_no']) ?>
+                                <?php if ($overdue): ?>
+                                    <span class="badge bg-danger ms-1">Quá hạn</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><?= $inv['invoice_date'] ? date('d/m/Y', strtotime($inv['invoice_date'])) : '<span class="text-muted">—</span>' ?></td>
+                            <td class="fw-semibold"><?= htmlspecialchars($inv['customer_name'] ?? '—') ?></td>
+                            <td class="text-end"><?= number_format($inv['total_amount']) ?> đ</td>
+                            <td class="text-end text-success"><?= number_format($inv['paid_amount']) ?> đ</td>
+                            <td class="text-end fw-bold <?= $debt > 0 ? 'text-danger' : 'text-success' ?>">
+                                <?= number_format($debt) ?> đ
+                            </td>
+                            <td>
+                                <?php
+                                $st = [
+                                    'draft'     => ['secondary', 'Chờ xuất'],
+                                    'unpaid'    => ['danger',    'Chưa TT'],
+                                    'partial'   => ['warning',   '1 phần'],
+                                    'paid'      => ['success',   'Đã TT'],
+                                    'cancelled' => ['secondary', 'Huỷ'],
+                                ];
+                                $s = $st[$inv['status']] ?? ['secondary','?'];
+                                echo "<span class='badge bg-{$s[0]}'>{$s[1]}</span>";
+                                ?>
+                            </td>
+                            <td class="<?= $overdue ? 'text-danger fw-bold' : 'text-muted' ?> small">
+                                <?= $inv['due_date'] ? date('d/m/Y', strtotime($inv['due_date'])) : '—' ?>
+                            </td>
+                            <td>
+                                <a href="invoice_detail.php?id=<?= $inv['id'] ?>"
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="fas fa-eye"></i>
+                                </a>
+                                <?php if ($inv['status'] !== 'paid' && $inv['status'] !== 'cancelled' && $inv['status'] !== 'draft'): ?>
+                                <button class="btn btn-sm btn-outline-success btn-pay"
+                                        data-id="<?= $inv['id'] ?>"
+                                        data-no="<?= htmlspecialchars($inv['invoice_no']) ?>"
+                                        data-debt="<?= $debt ?>">
+                                    <i class="fas fa-money-bill-wave"></i>
+                                </button>
+                                <?php endif; ?>
+                                <a href="/erp/api/invoice/print_invoice.php?id=<?= $inv['id'] ?>"
+                                   target="_blank" class="btn btn-sm btn-outline-secondary">
+                                    <i class="fas fa-print"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div class="card-footer text-muted small">
+            Tổng: <strong><?= count($invoices) ?></strong> hoá đơn
+        </div>
+    </div>
+</div>
+</div>
+
+<!-- ============ MODAL TẠO HOÁ ĐƠN ============ -->
+<div class="modal fade" id="modalInvoice" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-file-invoice me-2"></i>Tạo hoá đơn
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+<<<<<<< HEAD
+
+                <!-- BƯỚC 1: Chọn điều kiện -->
+                <div class="card border-0 bg-light mb-3">
+                    <div class="card-body py-3">
+                        <div class="row g-3 align-items-end">
+                            <div class="col-md-4">
+                                <label class="form-label fw-semibold">Khách hàng <span class="text-danger">*</span></label>
+                                <select id="invCustomerSelect" class="form-select" required>
+                                    <option value="">-- Chọn khách hàng --</option>
+                                    <?php foreach ($customers as $c): ?>
+                                    <option value="<?= $c['id'] ?>"
+                                            data-name="<?= htmlspecialchars($c['customer_name']) ?>">
+                                        [<?= htmlspecialchars($c['customer_code']) ?>]
+                                        <?= htmlspecialchars($c['customer_name']) ?>
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold">Từ ngày <span class="text-danger">*</span></label>
+                                <input type="date" id="invFromDate" class="form-control"
+                                       value="<?= date('Y-m-01') ?>">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold">Đến ngày <span class="text-danger">*</span></label>
+                                <input type="date" id="invToDate" class="form-control"
+                                       value="<?= date('Y-m-d') ?>">
+                            </div>
+                            <div class="col-md-2">
+                                <label class="form-label fw-semibold">Thuế VAT (%)</label>
+                                <input type="number" id="invVat" class="form-control" value="0" min="0" max="100">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="button" class="btn btn-primary w-100" id="btnLoadInvoiceData">
+                                    <i class="fas fa-search me-1"></i>Tải dữ liệu
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- BƯỚC 2: Kết quả preview -->
+                <div id="invPreviewArea" class="d-none">
+                    <!-- Thông tin HĐ -->
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Ngày HĐ <span class="text-danger">*</span></label>
+                            <input type="date" id="invInvoiceDate" class="form-control" value="<?= date('Y-m-d') ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Hạn thanh toán</label>
+                            <input type="date" id="invDueDate" class="form-control"
+                                   value="<?= date('Y-m-d', strtotime('+30 days')) ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Ghi chú</label>
+                            <input type="text" id="invNote" class="form-control" placeholder="Ghi chú hoá đơn...">
+                        </div>
+                    </div>
+
+                    <!-- Thông tin biên bản -->
+                    <div id="invDeliveryInfo" class="alert alert-info py-2 small mb-3"></div>
+
+                    <!-- Bảng SP tổng hợp -->
+                    <div class="table-responsive">
+                        <table class="table table-bordered align-middle mb-2" id="invPreviewTable">
+                            <thead class="table-dark">
+                                <tr>
+                                    <th>Mã SP</th>
+                                    <th>Mô tả</th>
+                                    <th class="text-center">ĐVT</th>
+                                    <th class="text-end">Tổng SL</th>
+                                    <th class="text-end">Đơn giá</th>
+                                    <th class="text-end">Thành tiền</th>
+                                </tr>
+                            </thead>
+                            <tbody id="invPreviewBody"></tbody>
+                            <tfoot>
+                                <tr class="table-light">
+                                    <td colspan="5" class="text-end fw-bold">Tạm tính:</td>
+                                    <td class="fw-bold text-end" id="invSubtotal">0 đ</td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td colspan="5" class="text-end fw-bold">
+                                        VAT (<span id="vatPct">0</span>%):
+                                    </td>
+                                    <td class="fw-bold text-end text-warning" id="invVatAmount">0 đ</td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td colspan="5" class="text-end fw-bold fs-6">Tổng cộng:</td>
+                                    <td class="fw-bold text-end text-success fs-6" id="invGrandTotal">0 đ</td>
+=======
+                <form id="formInvoice">
+                    <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+
+                    <div class="row g-3 mb-3 pb-3 border-bottom">
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Ngày HĐ <span class="text-danger">*</span></label>
+                            <input type="date" name="invoice_date" class="form-control"
+                                   value="<?= date('Y-m-d') ?>" required>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label fw-semibold">Hạn thanh toán</label>
+                            <input type="date" name="due_date" class="form-control"
+                                   value="<?= date('Y-m-d', strtotime('+30 days')) ?>">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label fw-semibold">Khách hàng <span class="text-danger">*</span></label>
+                            <select name="customer_id" id="invCustomer" class="form-select" required>
+                                <option value="">-- Chọn KH --</option>
+                                <?php foreach ($customers as $c): ?>
+                                <option value="<?= $c['id'] ?>">
+                                    [<?= htmlspecialchars($c['customer_code']) ?>]
+                                    <?= htmlspecialchars($c['customer_name']) ?>
+                                </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label fw-semibold">Thuế VAT (%)</label>
+                            <input type="number" name="vat_rate" id="invVat"
+                                   class="form-control" value="0" min="0" max="100">
+                        </div>
+                        <div class="col-12">
+                            <!-- Import từ biên bản giao hàng -->
+                            <?php if (!empty($pendingDeliveries)): ?>
+                            <div class="alert alert-info py-2 mb-0">
+                                <i class="fas fa-info-circle me-1"></i>
+                                <strong>Import từ biên bản:</strong>
+                                <select id="selDelivery" class="form-select form-select-sm d-inline-block w-auto ms-2">
+                                    <option value="">-- Chọn biên bản --</option>
+                                    <?php foreach ($pendingDeliveries as $dv): ?>
+                                    <option value="<?= $dv['id'] ?>"
+                                            data-custid="<?= $dv['customer_id'] ?>">
+                                        <?= htmlspecialchars($dv['delivery_no']) ?>
+                                        — <?= htmlspecialchars($dv['customer_name']) ?>
+                                        (<?= date('d/m/Y', strtotime($dv['delivery_date'])) ?>)
+                                        — <?= number_format($dv['total_amount']) ?> đ
+                                    </option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <button type="button" class="btn btn-sm btn-info ms-1" id="btnImportDelivery">
+                                    <i class="fas fa-download me-1"></i>Import
+                                </button>
+                            </div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label fw-semibold">Ghi chú</label>
+                            <input type="text" name="note" class="form-control" placeholder="Ghi chú hoá đơn...">
+                        </div>
+                    </div>
+
+                    <!-- Chi tiết SP -->
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-bold">Chi tiết sản phẩm</span>
+                        <button type="button" class="btn btn-sm btn-success" id="btnAddInvRow">
+                            <i class="fas fa-plus me-1"></i>Thêm dòng
+                        </button>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered align-middle mb-2" id="invItemTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th width="220">Mã sản phẩm</th>
+                                    <th>Mô tả</th>
+                                    <th width="70">ĐVT</th>
+                                    <th width="100">Số lượng</th>
+                                    <th width="130">Đơn giá</th>
+                                    <th width="140">Thành tiền</th>
+                                    <th width="40"></th>
+                                </tr>
+                            </thead>
+                            <tbody id="invItemBody"></tbody>
+                            <tfoot>
+                                <tr class="table-light">
+                                    <td colspan="5" class="text-end fw-bold">Tạm tính:</td>
+                                    <td class="fw-bold" id="invSubtotal">0 đ</td>
+                                    <td></td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td colspan="5" class="text-end fw-bold">VAT (<span id="vatPct">0</span>%):</td>
+                                    <td class="fw-bold text-warning" id="invVatAmount">0 đ</td>
+                                    <td></td>
+                                </tr>
+                                <tr class="table-light">
+                                    <td colspan="5" class="text-end fw-bold fs-6">Tổng cộng:</td>
+                                    <td class="fw-bold text-success fs-6" id="invGrandTotal">0 đ</td>
+                                    <td></td>
+>>>>>>> 2d78dfa9065c6d955e30172aa04de19c7e992c2f
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+<<<<<<< HEAD
+
+                    <!-- Cảnh báo SP chưa có báo giá -->
+                    <div id="invNoPriceWarning" class="d-none alert alert-warning py-2 small">
+                        <i class="fas fa-exclamation-triangle me-1"></i>
+                        <span id="invNoPriceList"></span>
+                    </div>
+                </div>
+
+                <!-- Trạng thái loading / empty -->
+                <div id="invLoadingMsg" class="text-center py-4 text-muted d-none">
+                    <i class="fas fa-spinner fa-spin me-2"></i>Đang tải dữ liệu...
+                </div>
+                <div id="invEmptyMsg" class="text-center py-4 text-muted d-none">
+                    <i class="fas fa-inbox me-2"></i>Không có biên bản giao hàng nào trong khoảng thời gian này.
+                </div>
+
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Huỷ</button>
+                <button type="button" class="btn btn-primary d-none" id="btnSaveInvoice">
+                    <i class="fas fa-save me-1"></i>Xác nhận tạo hoá đơn
+=======
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Huỷ</button>
+                <button type="button" class="btn btn-primary" id="btnSaveInvoice">
+                    <i class="fas fa-save me-1"></i>Tạo hoá đơn
+>>>>>>> 2d78dfa9065c6d955e30172aa04de19c7e992c2f
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ============ MODAL THU TIỀN ============ -->
+<div class="modal fade" id="modalPay" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">
+                    <i class="fas fa-money-bill-wave me-2"></i>Ghi nhận thanh toán
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formPay">
+                    <input type="hidden" name="csrf_token" value="<?= $csrf ?>">
+                    <input type="hidden" name="invoice_id" id="payInvoiceId">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Số hoá đơn</label>
+                        <input type="text" id="payInvoiceNo" class="form-control bg-light" readonly>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Ngày thu <span class="text-danger">*</span></label>
+                        <input type="date" name="payment_date" class="form-control"
+                               value="<?= date('Y-m-d') ?>" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Số tiền thu <span class="text-danger">*</span></label>
+                        <input type="number" name="amount" id="payAmount"
+                               class="form-control" placeholder="0" min="1" required>
+                        <div class="form-text text-danger" id="payDebtInfo"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Hình thức</label>
+                        <select name="payment_method" class="form-select">
+                            <option value="cash">Tiền mặt</option>
+                            <option value="transfer">Chuyển khoản</option>
+                            <option value="check">Séc</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Ghi chú</label>
+                        <input type="text" name="note" class="form-control" placeholder="Số chứng từ, ghi chú...">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Huỷ</button>
+                <button type="button" class="btn btn-success" id="btnSavePay">
+                    <i class="fas fa-save me-1"></i>Lưu
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+<<<<<<< HEAD
+const CSRF_TOKEN = <?= json_encode($csrf) ?>;
+
+// ── Biến lưu dữ liệu đã load ──
+let loadedItems      = [];   // [{product_code_id, product_code, description, unit, quantity, unit_price, total_price}]
+let loadedDeliveries = [];   // danh sách biên bản
+let loadedCustomerId = null;
+
+// ── Reset modal khi mở lại ──
+document.getElementById('modalInvoice').addEventListener('show.bs.modal', () => {
+    document.getElementById('invPreviewArea').classList.add('d-none');
+    document.getElementById('invLoadingMsg').classList.add('d-none');
+    document.getElementById('invEmptyMsg').classList.add('d-none');
+    document.getElementById('btnSaveInvoice').classList.add('d-none');
+    document.getElementById('invPreviewBody').innerHTML = '';
+    document.getElementById('invDeliveryInfo').textContent = '';
+    document.getElementById('invNoPriceWarning').classList.add('d-none');
+    loadedItems = [];
+    loadedDeliveries = [];
+    loadedCustomerId = null;
+});
+
+// ── Tải dữ liệu khi nhấn nút ──
+document.getElementById('btnLoadInvoiceData').addEventListener('click', () => {
+    const customerId = document.getElementById('invCustomerSelect').value;
+    const fromDate   = document.getElementById('invFromDate').value;
+    const toDate     = document.getElementById('invToDate').value;
+
+    if (!customerId) { alert('Vui lòng chọn khách hàng!'); return; }
+    if (!fromDate || !toDate) { alert('Vui lòng chọn khoảng thời gian!'); return; }
+    if (fromDate > toDate) { alert('Từ ngày không được lớn hơn đến ngày!'); return; }
+
+    document.getElementById('invPreviewArea').classList.add('d-none');
+    document.getElementById('invEmptyMsg').classList.add('d-none');
+    document.getElementById('btnSaveInvoice').classList.add('d-none');
+    document.getElementById('invLoadingMsg').classList.remove('d-none');
+
+    fetch(`/erp/api/invoice/get_deliveries_by_customer.php?customer_id=${customerId}&from=${fromDate}&to=${toDate}`)
+        .then(r => r.json())
+        .then(res => {
+            document.getElementById('invLoadingMsg').classList.add('d-none');
+
+            if (!res.ok) { alert('Lỗi: ' + res.msg); return; }
+
+            if (!res.deliveries || res.deliveries.length === 0) {
+                document.getElementById('invEmptyMsg').classList.remove('d-none');
+                return;
+            }
+
+            loadedDeliveries = res.deliveries;
+            loadedCustomerId = customerId;
+
+            // Tổng hợp items: gộp theo product_code_id, cộng dồn SL
+            const merged = {};
+            const noPriceList = [];
+            (res.items_by_delivery ? Object.values(res.items_by_delivery).flat() : []).forEach(item => {
+                const key = item.product_code_id;
+                if (!merged[key]) {
+                    merged[key] = {
+                        product_code_id : item.product_code_id,
+                        product_code    : item.product_code,
+                        description     : item.description,
+                        unit            : item.unit,
+                        quantity        : 0,
+                        unit_price      : parseFloat(item.unit_price) || 0,
+                        total_price     : 0,
+                    };
+                    if (!parseFloat(item.unit_price)) noPriceList.push(item.product_code);
+                }
+                merged[key].quantity   += parseFloat(item.quantity) || 0;
+                merged[key].total_price = Math.round(merged[key].quantity * merged[key].unit_price);
+            });
+
+            loadedItems = Object.values(merged);
+
+            // Hiển thị bảng preview
+            renderPreview(loadedItems, loadedDeliveries, noPriceList);
+        })
+        .catch(() => {
+            document.getElementById('invLoadingMsg').classList.add('d-none');
+            alert('Lỗi kết nối, vui lòng thử lại.');
+        });
+});
+
+function renderPreview(items, deliveries, noPriceList) {
+    // Thông tin biên bản
+    const dlNos = deliveries.map(d =>
+        `<strong>${esc(d.delivery_no)}</strong> (${fmtDate(d.delivery_date)})`
+    ).join(', ');
+    document.getElementById('invDeliveryInfo').innerHTML =
+        `<i class="fas fa-truck me-1"></i> Tổng hợp từ <strong>${deliveries.length}</strong> biên bản giao hàng: ${dlNos}`;
+
+    // Bảng SP
+    const tbody = document.getElementById('invPreviewBody');
+    tbody.innerHTML = '';
+
+    let subtotal = 0;
+    items.forEach(item => {
+        subtotal += item.total_price;
+        const priceClass = item.unit_price > 0 ? '' : 'text-danger';
+        tbody.insertAdjacentHTML('beforeend', `
+            <tr>
+                <td><span class="badge bg-primary">${esc(item.product_code)}</span></td>
+                <td>${esc(item.description)}</td>
+                <td class="text-center">${esc(item.unit)}</td>
+                <td class="text-end fw-semibold">${fmtNum(item.quantity)}</td>
+                <td class="text-end ${priceClass}">
+                    <input type="number" class="form-control form-control-sm text-end inv-unit-price"
+                           style="width:130px;display:inline-block"
+                           min="0" step="1"
+                           value="${item.unit_price}"
+                           data-idx="${items.indexOf(item)}">
+                </td>
+                <td class="text-end fw-bold inv-row-total">${fmtMoney(item.total_price)}</td>
+            </tr>
+        `);
+    });
+
+    updateTotals();
+
+    // Cảnh báo SP chưa có báo giá
+    if (noPriceList.length > 0) {
+        document.getElementById('invNoPriceWarning').classList.remove('d-none');
+        document.getElementById('invNoPriceList').textContent =
+            'Các mã SP chưa có báo giá (đơn giá = 0): ' + noPriceList.join(', ') +
+            '. Vui lòng nhập đơn giá thủ công trước khi tạo HĐ.';
+    } else {
+        document.getElementById('invNoPriceWarning').classList.add('d-none');
+    }
+
+    document.getElementById('invPreviewArea').classList.remove('d-none');
+    document.getElementById('btnSaveInvoice').classList.remove('d-none');
+
+    // Sự kiện thay đổi đơn giá
+    document.querySelectorAll('.inv-unit-price').forEach(input => {
+        input.addEventListener('input', () => {
+            const idx = parseInt(input.dataset.idx);
+            const qty = loadedItems[idx].quantity;
+            const price = parseFloat(input.value) || 0;
+            loadedItems[idx].unit_price  = price;
+            loadedItems[idx].total_price = Math.round(qty * price);
+            input.closest('tr').querySelector('.inv-row-total').textContent = fmtMoney(loadedItems[idx].total_price);
+            updateTotals();
+        });
+    });
+}
+
+function updateTotals() {
+    const vatRate = (parseFloat(document.getElementById('invVat').value) || 0) / 100;
+    let subtotal = 0;
+    loadedItems.forEach(item => subtotal += item.total_price);
+    const vatAmt   = Math.round(subtotal * vatRate);
+    const grandTotal = subtotal + vatAmt;
+
+    document.getElementById('invSubtotal').textContent  = fmtMoney(subtotal);
+    document.getElementById('vatPct').textContent        = document.getElementById('invVat').value || 0;
+    document.getElementById('invVatAmount').textContent  = fmtMoney(vatAmt);
+    document.getElementById('invGrandTotal').textContent = fmtMoney(grandTotal);
+}
+
+document.getElementById('invVat').addEventListener('input', updateTotals);
+
+// ── Lưu hoá đơn ──
+document.getElementById('btnSaveInvoice').addEventListener('click', () => {
+    if (!loadedCustomerId || loadedItems.length === 0) {
+        alert('Không có dữ liệu để tạo hoá đơn!');
+        return;
+    }
+
+    const invoiceDate = document.getElementById('invInvoiceDate').value;
+    const dueDate     = document.getElementById('invDueDate').value;
+    const note        = document.getElementById('invNote').value;
+    const vatRate     = parseFloat(document.getElementById('invVat').value) || 0;
+
+    if (!invoiceDate) { alert('Vui lòng nhập ngày hoá đơn!'); return; }
+
+    // Kiểm tra còn SP đơn giá = 0
+    const zeroPrices = loadedItems.filter(it => it.unit_price <= 0);
+    if (zeroPrices.length > 0) {
+        const codes = zeroPrices.map(it => it.product_code).join(', ');
+        if (!confirm(`Các mã SP: ${codes} có đơn giá = 0. Vẫn tiếp tục tạo hoá đơn?`)) return;
+    }
+
+    const btn = document.getElementById('btnSaveInvoice');
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Đang lưu...';
+
+    const fd = new FormData();
+    fd.append('csrf_token', CSRF_TOKEN);
+    fd.append('customer_id',   loadedCustomerId);
+    fd.append('invoice_date',  invoiceDate);
+    fd.append('due_date',      dueDate);
+    fd.append('note',          note);
+    fd.append('vat_rate',      vatRate);
+    fd.append('delivery_ids',  JSON.stringify(loadedDeliveries.map(d => d.id)));
+    loadedItems.forEach((item, i) => {
+        fd.append(`items[${i}][product_code_id]`, item.product_code_id);
+        fd.append(`items[${i}][description]`,     item.description);
+        fd.append(`items[${i}][unit]`,            item.unit);
+        fd.append(`items[${i}][quantity]`,        item.quantity);
+        fd.append(`items[${i}][unit_price]`,      item.unit_price);
+        fd.append(`items[${i}][total_price]`,     item.total_price);
+    });
+
+    fetch('/erp/api/invoice/save_invoice.php', { method: 'POST', body: fd })
+        .then(r => r.json())
+        .then(res => {
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('modalInvoice')).hide();
+                location.reload();
+            } else {
+                alert('Lỗi: ' + res.msg);
+            }
+        })
+        .catch(() => alert('Lỗi kết nối!'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Xác nhận tạo hoá đơn';
+        });
+});
+
+// ── Thu tiền ──
+=======
+const INV_PRODUCTS = <?= json_encode($productList) ?>;
+let invRowIdx = 0;
+
+function makeInvRow(idx, pc={}) {
+    const opts = INV_PRODUCTS.map(p =>
+        `<option value="${p.id}"
+            data-desc="${p.description}" data-unit="${p.unit}" data-price="${p.unit_price}"
+            ${pc.product_code_id == p.id ? 'selected' : ''}>
+            [${p.product_code}] ${p.description}
+        </option>`
+    ).join('');
+    return `
+    <tr data-idx="${idx}">
+        <td><select name="items[${idx}][product_code_id]" class="form-select form-select-sm sel-inv-product" required>
+            <option value="">-- Chọn SP --</option>${opts}</select></td>
+        <td><input type="text" name="items[${idx}][description]"
+                   class="form-control form-control-sm inp-inv-desc" value="${pc.description||''}" readonly></td>
+        <td><input type="text" name="items[${idx}][unit]"
+                   class="form-control form-control-sm inp-inv-unit" value="${pc.unit||''}" readonly></td>
+        <td><input type="number" name="items[${idx}][quantity]"
+                   class="form-control form-control-sm inp-inv-qty" min="1" value="${pc.quantity||0}" required></td>
+        <td><input type="number" name="items[${idx}][unit_price]"
+                   class="form-control form-control-sm inp-inv-price" min="0" value="${pc.unit_price||0}"></td>
+        <td><input type="number" name="items[${idx}][total_price]"
+                   class="form-control form-control-sm inp-inv-total fw-bold text-success" readonly value="${pc.total_price||0}"></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger btn-rm-inv"><i class="fas fa-times"></i></button></td>
+    </tr>`;
+}
+
+function addInvRow(pc={}) {
+    document.getElementById('invItemBody').insertAdjacentHTML('beforeend', makeInvRow(invRowIdx++, pc));
+    calcInvRow(document.querySelector(`#invItemBody tr:last-child`));
+}
+
+document.getElementById('modalInvoice').addEventListener('show.bs.modal', () => {
+    document.getElementById('invItemBody').innerHTML = '';
+    invRowIdx = 0;
+    addInvRow();
+    updateInvTotals();
+});
+
+document.getElementById('btnAddInvRow').addEventListener('click', () => addInvRow());
+
+// Event delegation
+document.getElementById('invItemBody').addEventListener('change', function(e) {
+    const row = e.target.closest('tr'); if (!row) return;
+    if (e.target.classList.contains('sel-inv-product')) {
+        const opt = e.target.options[e.target.selectedIndex];
+        row.querySelector('.inp-inv-desc').value  = opt.dataset.desc  || '';
+        row.querySelector('.inp-inv-unit').value  = opt.dataset.unit  || '';
+        row.querySelector('.inp-inv-price').value = opt.dataset.price || 0;
+        calcInvRow(row);
+    }
+    if (e.target.classList.contains('inp-inv-qty') ||
+        e.target.classList.contains('inp-inv-price')) calcInvRow(row);
+});
+document.getElementById('invItemBody').addEventListener('input', function(e) {
+    const row = e.target.closest('tr'); if (!row) return;
+    if (e.target.classList.contains('inp-inv-qty') ||
+        e.target.classList.contains('inp-inv-price')) calcInvRow(row);
+});
+document.getElementById('invItemBody').addEventListener('click', function(e) {
+    if (e.target.closest('.btn-rm-inv')) {
+        if (document.querySelectorAll('#invItemBody tr').length <= 1) { alert('Cần ít nhất 1 dòng!'); return; }
+        e.target.closest('tr').remove(); updateInvTotals();
+    }
+});
+
+function calcInvRow(row) {
+    const qty   = parseFloat(row.querySelector('.inp-inv-qty').value)   || 0;
+    const price = parseFloat(row.querySelector('.inp-inv-price').value) || 0;
+    row.querySelector('.inp-inv-total').value = Math.round(qty * price);
+    updateInvTotals();
+}
+
+function updateInvTotals() {
+    let sub = 0;
+    document.querySelectorAll('.inp-inv-total').forEach(el => sub += parseFloat(el.value)||0);
+    const vat  = (parseFloat(document.getElementById('invVat').value) || 0) / 100;
+    const vatAmt = Math.round(sub * vat);
+    document.getElementById('invSubtotal').textContent    = sub.toLocaleString('vi-VN') + ' đ';
+    document.getElementById('vatPct').textContent         = document.getElementById('invVat').value || 0;
+    document.getElementById('invVatAmount').textContent   = vatAmt.toLocaleString('vi-VN') + ' đ';
+    document.getElementById('invGrandTotal').textContent  = (sub + vatAmt).toLocaleString('vi-VN') + ' đ';
+}
+document.getElementById('invVat').addEventListener('input', updateInvTotals);
+
+// Import từ biên bản
+const btnImport = document.getElementById('btnImportDelivery');
+if (btnImport) {
+    btnImport.addEventListener('click', () => {
+        const sel = document.getElementById('selDelivery');
+        const id  = sel.value; if (!id) return;
+        const custId = sel.options[sel.selectedIndex].dataset.custid;
+        // Set customer
+        const custSel = document.getElementById('invCustomer');
+        if (custId) custSel.value = custId;
+
+        fetch(`/erp/api/invoice/get_delivery_items.php?id=${id}`)
+        .then(r => r.json())
+        .then(res => {
+            if (res.ok) {
+                document.getElementById('invItemBody').innerHTML = '';
+                invRowIdx = 0;
+                res.items.forEach(it => addInvRow(it));
+                // Ghi nhớ delivery_id để link
+                document.getElementById('formInvoice').dataset.deliveryId = id;
+            } else alert('Lỗi: ' + res.msg);
+        });
+    });
+}
+
+// Lưu hoá đơn
+document.getElementById('btnSaveInvoice').addEventListener('click', () => {
+    const form = document.getElementById('formInvoice');
+    if (!form.checkValidity()) { form.reportValidity(); return; }
+
+    let valid = false;
+    document.querySelectorAll('#invItemBody tr').forEach(r => {
+        if (r.querySelector('.sel-inv-product').value &&
+            parseFloat(r.querySelector('.inp-inv-qty').value) > 0) valid = true;
+    });
+    if (!valid) { alert('Cần ít nhất 1 dòng sản phẩm hợp lệ!'); return; }
+
+    const btn = document.getElementById('btnSaveInvoice');
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Đang lưu...';
+
+    const fd = new FormData(form);
+    if (form.dataset.deliveryId) fd.append('delivery_id', form.dataset.deliveryId);
+
+    fetch('/erp/api/invoice/save_invoice.php', { method:'POST', body: fd })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) { bootstrap.Modal.getInstance(document.getElementById('modalInvoice')).hide(); location.reload(); }
+        else alert('Lỗi: ' + res.msg);
+    })
+    .finally(() => { btn.disabled=false; btn.innerHTML='<i class="fas fa-save me-1"></i>Tạo hoá đơn'; });
+});
+
+// Thu tiền
+>>>>>>> 2d78dfa9065c6d955e30172aa04de19c7e992c2f
+document.querySelectorAll('.btn-pay').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.getElementById('payInvoiceId').value  = btn.dataset.id;
+        document.getElementById('payInvoiceNo').value  = btn.dataset.no;
+        document.getElementById('payAmount').value     = btn.dataset.debt;
+<<<<<<< HEAD
+        document.getElementById('payDebtInfo').textContent =
+            'Còn nợ: ' + parseInt(btn.dataset.debt).toLocaleString('vi-VN') + ' đ';
+=======
+        document.getElementById('payDebtInfo').textContent = 'Còn nợ: ' + parseInt(btn.dataset.debt).toLocaleString('vi-VN') + ' đ';
+>>>>>>> 2d78dfa9065c6d955e30172aa04de19c7e992c2f
+        new bootstrap.Modal(document.getElementById('modalPay')).show();
+    });
+});
+
+document.getElementById('btnSavePay').addEventListener('click', () => {
+    const form = document.getElementById('formPay');
+    if (!form.checkValidity()) { form.reportValidity(); return; }
+    const btn = document.getElementById('btnSavePay');
+<<<<<<< HEAD
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Đang lưu...';
+    fetch('/erp/api/invoice/save_payment.php', { method: 'POST', body: new FormData(form) })
+        .then(r => r.json())
+        .then(res => {
+            if (res.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('modalPay')).hide();
+                location.reload();
+            } else {
+                alert('Lỗi: ' + res.msg);
+            }
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save me-1"></i>Lưu';
+        });
+});
+
+// ── Helpers ──
+function esc(v) {
+    return String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+function fmtNum(v) {
+    return Number(v || 0).toLocaleString('vi-VN');
+}
+function fmtMoney(v) {
+    return Number(v || 0).toLocaleString('vi-VN') + ' đ';
+}
+function fmtDate(d) {
+    if (!d) return '';
+    const [y, m, day] = d.split('-');
+    return `${day}/${m}/${y}`;
+}
+=======
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin me-1"></i>Đang lưu...';
+    fetch('/erp/api/invoice/save_payment.php', { method:'POST', body: new FormData(form) })
+    .then(r => r.json())
+    .then(res => {
+        if (res.ok) { bootstrap.Modal.getInstance(document.getElementById('modalPay')).hide(); location.reload(); }
+        else alert('Lỗi: ' + res.msg);
+    })
+    .finally(() => { btn.disabled=false; btn.innerHTML='<i class="fas fa-save me-1"></i>Lưu'; });
+});
+>>>>>>> 2d78dfa9065c6d955e30172aa04de19c7e992c2f
+</script>
+<?php include $_SERVER['DOCUMENT_ROOT'] . '/erp/includes/footer.php'; ?>
